@@ -1,8 +1,13 @@
 # Group Expense Splitter — Spec
 
-Take-home from William (deadline 2026-10-25). Target: < 1 hour, working core + clear tradeoffs.
-This file records the design agreed before writing code. The README summarises it for reviewers.
-**Keep in sync with `SPEC.zh-TW.md`.**
+A small full-stack web app for friends splitting shared costs on a trip. Someone creates a
+group and adds members by name. Anyone in the group logs an expense — who paid, how much, and
+how it is split (equally, by exact amounts, or by percentages). The app shows each person's
+current balance and a settle-up plan that clears all debts in as few payments as practical.
+Expenses can be edited or deleted and balances follow. Data survives a server restart, and two
+people using the app in different browsers see each other's changes.
+
+(Mirror: `SPEC.zh-TW.md` — change both together.)
 
 ## Scope
 
