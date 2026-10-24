@@ -146,14 +146,14 @@ button.chip { min-height: 36px; }
 .hint.warn { color: var(--warn); }
 .hint.ok { color: var(--pos); }
 .error-box { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background: var(--neg-bg); color: var(--neg); border-radius: var(--radius-sm); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.actions { display: flex; gap: 10px; margin-top: var(--sp-4); }
+/* Sticky footer inside the scrolling sheet: negative margins cancel the sheet's side/bottom padding so it spans edge to edge. */
+.actions { display: flex; gap: 10px; position: sticky; bottom: 0; background: var(--card); margin: var(--sp-4) calc(-1 * var(--sp-4)) calc(-1 * (var(--sp-5) + env(safe-area-inset-bottom))); padding: var(--sp-3) var(--sp-4) calc(var(--sp-5) + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
 .btn { flex: 1; border: 0; border-radius: var(--radius-pill); height: var(--fab-h); font-size: var(--fs-lg); font-weight: 600; }
 .btn.block { width: 100%; flex: none; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); }
 .btn.primary[disabled] { opacity: .45; cursor: not-allowed; }
 .btn.ghost { background: var(--bg); color: var(--ink); }
 .toggle-row { width: 100%; display: flex; align-items: center; justify-content: space-between; background: var(--field); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; font-size: var(--fs-sm); min-height: var(--tap); text-align: left; margin-bottom: var(--sp-3); }
-.toggle-row .chev { color: var(--muted); font-size: 20px; }
 .toggle-row.confirm { background: var(--neg-bg); border-color: #fecaca; }
 
 /* ---- create group (/) ---- */

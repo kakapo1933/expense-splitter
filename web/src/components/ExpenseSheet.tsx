@@ -73,7 +73,6 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
   const [equalIds, setEqualIds] = useState<Set<string>>(init.equalIds);
   const [exact, setExact] = useState<Inputs>(init.exact);
   const [percent, setPercent] = useState<Inputs>(init.percent);
-  const [expanded, setExpanded] = useState(Boolean(expense));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,14 +179,6 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
       return next;
     });
 
-  const summary = `${payer?.name ?? "?"} paid · ${
-    mode === "equal"
-      ? `split equally among ${equalMembers.length}`
-      : mode === "exact"
-        ? "exact amounts"
-        : "by percent"
-  }`;
-
   return (
     <div className="sheet-root" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
       <div className="dim" onClick={onClose} />
@@ -241,173 +232,164 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
           {amountError && <div className="hint warn">{amountError}</div>}
         </div>
 
-        {!expanded ? (
-          <button type="button" className="toggle-row" onClick={() => setExpanded(true)}>
-            <span>{summary}</span>
-            <span className="chev">›</span>
-          </button>
-        ) : (
-          <>
-            <div className="field">
-              <label>Paid by</label>
-              <div className="chips" role="radiogroup" aria-label="Paid by">
+        <div className="field">
+          <label>Paid by</label>
+          <div className="chips" role="radiogroup" aria-label="Paid by">
+            {members.map((m, i) => (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={m.id === payerId}
+                className={`chip ${m.id === payerId ? "on" : ""}`}
+                key={m.id}
+                onClick={() => setPayerId(m.id)}
+              >
+                <Avatar name={m.name} index={i} size={18} />
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label>Split</label>
+          <div className="seg" role="tablist" aria-label="Split mode">
+            {(["equal", "exact", "percent"] as SplitMode[]).map((m) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                className={mode === m ? "on" : ""}
+                key={m}
+                onClick={() => setMode(m)}
+              >
+                {m === "equal" ? "Equally" : m === "exact" ? "Exact" : "Percent"}
+              </button>
+            ))}
+          </div>
+
+          {mode === "equal" && (
+            <>
+              <div className="chips mt" role="group" aria-label="Split between">
                 {members.map((m, i) => (
                   <button
                     type="button"
-                    role="radio"
-                    aria-checked={m.id === payerId}
-                    className={`chip ${m.id === payerId ? "on" : ""}`}
+                    role="checkbox"
+                    aria-checked={equalIds.has(m.id)}
+                    className={`chip ${equalIds.has(m.id) ? "on" : ""}`}
                     key={m.id}
-                    onClick={() => setPayerId(m.id)}
+                    onClick={() => toggleEqual(m.id)}
                   >
                     <Avatar name={m.name} index={i} size={18} />
                     {m.name}
                   </button>
                 ))}
               </div>
-            </div>
+              {equalMembers.length === 0 ? (
+                <div className="hint warn">Pick at least one person.</div>
+              ) : cents !== null && cents > 0 ? (
+                <>
+                  <div className="preview">
+                    {equalShares.map((s) => (
+                      <span className="each" key={s.memberId}>
+                        {members[idx(s.memberId)]?.name} <b>{formatCents(s.cents)}</b>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="hint">
+                    {equalRemainder > 0
+                      ? `Extra ${equalRemainder}¢ ${equalRemainder === 1 ? "goes" : "go"} to ${equalMembers
+                          .slice(0, equalRemainder)
+                          .map((m) => m.name)
+                          .join(", ")} (first ${equalRemainder === 1 ? "member" : "members"}). `
+                      : "Splits evenly, no leftover cents. "}
+                    Tap a name to exclude them.
+                  </div>
+                </>
+              ) : (
+                <div className="hint">Tap a name to exclude them.</div>
+              )}
+            </>
+          )}
 
-            <div className="field">
-              <label>Split</label>
-              <div className="seg" role="tablist" aria-label="Split mode">
-                {(["equal", "exact", "percent"] as SplitMode[]).map((m) => (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === m}
-                    className={mode === m ? "on" : ""}
-                    key={m}
-                    onClick={() => setMode(m)}
-                  >
-                    {m === "equal" ? "Equally" : m === "exact" ? "Exact" : "Percent"}
-                  </button>
+          {mode === "exact" && (
+            <>
+              <div className="split-rows mt">
+                {members.map((m, i) => (
+                  <div className="srow" key={m.id}>
+                    <label className="nm" htmlFor={`ex-${m.id}`}>
+                      <Avatar name={m.name} index={i} size={22} />
+                      {m.name}
+                    </label>
+                    <input
+                      id={`ex-${m.id}`}
+                      className={`input mini ${exactParsed[i]?.cents === null ? "invalid" : ""}`}
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={exact[m.id] ?? ""}
+                      onChange={(e) => setExact({ ...exact, [m.id]: e.target.value })}
+                    />
+                  </div>
                 ))}
               </div>
-
-              {mode === "equal" && (
-                <>
-                  <div className="chips mt" role="group" aria-label="Split between">
-                    {members.map((m, i) => (
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={equalIds.has(m.id)}
-                        className={`chip ${equalIds.has(m.id) ? "on" : ""}`}
-                        key={m.id}
-                        onClick={() => toggleEqual(m.id)}
-                      >
-                        <Avatar name={m.name} index={i} size={18} />
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                  {equalMembers.length === 0 ? (
-                    <div className="hint warn">Pick at least one person.</div>
-                  ) : cents !== null && cents > 0 ? (
-                    <>
-                      <div className="preview">
-                        {equalShares.map((s) => (
-                          <span className="each" key={s.memberId}>
-                            {members[idx(s.memberId)]?.name} <b>{formatCents(s.cents)}</b>
-                          </span>
-                        ))}
-                      </div>
-                      <div className="hint">
-                        {equalRemainder > 0
-                          ? `Extra ${equalRemainder}¢ ${equalRemainder === 1 ? "goes" : "go"} to ${equalMembers
-                              .slice(0, equalRemainder)
-                              .map((m) => m.name)
-                              .join(", ")} (first ${equalRemainder === 1 ? "member" : "members"}). `
-                          : "Splits evenly, no leftover cents. "}
-                        Tap a name to exclude them.
-                      </div>
-                    </>
-                  ) : (
-                    <div className="hint">Tap a name to exclude them.</div>
-                  )}
-                </>
+              {exactInvalid ? (
+                <div className="hint warn">Each amount must look like 12.50.</div>
+              ) : cents === null ? (
+                <div className="hint">Enter the total amount first.</div>
+              ) : exactDiff === 0 ? (
+                <div className="hint ok">✓ Sums to {formatCents(cents)}</div>
+              ) : exactDiff !== null && exactDiff > 0 ? (
+                <div className="hint warn">{formatCents(exactDiff)} left to assign</div>
+              ) : (
+                <div className="hint warn">{formatCents(-(exactDiff ?? 0))} over</div>
               )}
+            </>
+          )}
 
-              {mode === "exact" && (
-                <>
-                  <div className="split-rows mt">
-                    {members.map((m, i) => (
-                      <div className="srow" key={m.id}>
-                        <label className="nm" htmlFor={`ex-${m.id}`}>
-                          <Avatar name={m.name} index={i} size={22} />
-                          {m.name}
-                        </label>
-                        <input
-                          id={`ex-${m.id}`}
-                          className={`input mini ${exactParsed[i]?.cents === null ? "invalid" : ""}`}
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          value={exact[m.id] ?? ""}
-                          onChange={(e) => setExact({ ...exact, [m.id]: e.target.value })}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  {exactInvalid ? (
-                    <div className="hint warn">Each amount must look like 12.50.</div>
-                  ) : cents === null ? (
-                    <div className="hint">Enter the total amount first.</div>
-                  ) : exactDiff === 0 ? (
-                    <div className="hint ok">✓ Sums to {formatCents(cents)}</div>
-                  ) : exactDiff !== null && exactDiff > 0 ? (
-                    <div className="hint warn">{formatCents(exactDiff)} left to assign</div>
-                  ) : (
-                    <div className="hint warn">{formatCents(-(exactDiff ?? 0))} over</div>
-                  )}
-                </>
-              )}
-
-              {mode === "percent" && (
-                <>
-                  <div className="split-rows mt">
-                    {members.map((m, i) => (
-                      <div className="srow" key={m.id}>
-                        <label className="nm" htmlFor={`pc-${m.id}`}>
-                          <Avatar name={m.name} index={i} size={22} />
-                          {m.name}
-                        </label>
-                        <div className={`input mini pct ${pctParsed[i]?.bp === null ? "invalid" : ""}`}>
-                          <input
-                            id={`pc-${m.id}`}
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="0"
-                            value={percent[m.id] ?? ""}
-                            onChange={(e) => setPercent({ ...percent, [m.id]: e.target.value })}
-                          />
-                          <span className="ph">%</span>
-                        </div>
-                        <span className="res">
-                          {cents !== null && !pctInvalid ? formatCents(pctShares[i]?.cents ?? 0) : "—"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {pctInvalid ? (
-                    <div className="hint warn">Each percent must look like 33.33.</div>
-                  ) : pctOk ? (
-                    <div className="hint ok">
-                      ✓ {formatPct(pctSum)}%{cents !== null ? ` · shares sum to ${formatCents(cents)}` : ""}
-                      {pctResidual !== 0 && cents !== null
-                        ? ` · ${pctResidual > 0 ? "+" : "−"}${Math.abs(pctResidual)}¢ spread by largest remainder`
-                        : ""}
+          {mode === "percent" && (
+            <>
+              <div className="split-rows mt">
+                {members.map((m, i) => (
+                  <div className="srow" key={m.id}>
+                    <label className="nm" htmlFor={`pc-${m.id}`}>
+                      <Avatar name={m.name} index={i} size={22} />
+                      {m.name}
+                    </label>
+                    <div className={`input mini pct ${pctParsed[i]?.bp === null ? "invalid" : ""}`}>
+                      <input
+                        id={`pc-${m.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={percent[m.id] ?? ""}
+                        onChange={(e) => setPercent({ ...percent, [m.id]: e.target.value })}
+                      />
+                      <span className="ph">%</span>
                     </div>
-                  ) : pctSum < 10000 ? (
-                    <div className="hint warn">{formatPct(10000 - pctSum)}% left · percents must total 100</div>
-                  ) : (
-                    <div className="hint warn">{formatPct(pctSum - 10000)}% over · percents must total 100</div>
-                  )}
-                </>
+                    <span className="res">
+                      {cents !== null && !pctInvalid ? formatCents(pctShares[i]?.cents ?? 0) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {pctInvalid ? (
+                <div className="hint warn">Each percent must look like 33.33.</div>
+              ) : pctOk ? (
+                <div className="hint ok">
+                  ✓ {formatPct(pctSum)}%{cents !== null ? ` · shares sum to ${formatCents(cents)}` : ""}
+                  {pctResidual !== 0 && cents !== null
+                    ? ` · ${pctResidual > 0 ? "+" : "−"}${Math.abs(pctResidual)}¢ spread by largest remainder`
+                    : ""}
+                </div>
+              ) : pctSum < 10000 ? (
+                <div className="hint warn">{formatPct(10000 - pctSum)}% left · percents must total 100</div>
+              ) : (
+                <div className="hint warn">{formatPct(pctSum - 10000)}% over · percents must total 100</div>
               )}
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
 
         {confirmDelete && (
           <div className="toggle-row confirm">
