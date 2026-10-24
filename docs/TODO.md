@@ -29,12 +29,14 @@
 - 備註：第一版在 ±0.01 容許值下殘差只補一輪，$1000 會少 7 分；主管串用大金額探出，spec 補規則後修正
 
 ## 3. 資料與 API
-- [ ] `db.ts`：開檔、建四張表、`PRAGMA foreign_keys=ON`、WAL
-- [ ] `schemas.ts`：zod `ExpenseInput`、`NameInput`
-- [ ] `routes.ts`：七個 endpoint；寫入在 transaction 內；群組成員檢查
-- [ ] `events.ts`：SSE，每群組一組訂閱者，寫入後廣播 `changed`
-- [ ] 錯誤處理：zod → 400 `{error, issues}`；找不到 → 404
-- 驗證：curl 建群、加人、記三種分法、改、刪；重啟 server 後 `GET` 資料仍在；`curl -N /events` 看得到廣播
+- [x] `db.ts`：`node:sqlite` 開檔、建四張表、`PRAGMA foreign_keys=ON`、WAL；路徑以 `import.meta.url` 為基準
+- [x] `schemas.ts`：zod `ExpenseInput`、`NameInput`
+- [x] `service.ts` + `routes.ts`：七個 endpoint；寫入在 transaction 內；群組成員檢查；members/expenses 依 `rowid` 排序
+- [x] `events.ts`：SSE，每群組一組訂閱者，寫入後廣播 `changed`
+- [x] 錯誤處理：zod → 400 `VALIDATION`；money → 400 帶 code（`PERCENT_SUM_MISMATCH` 等）；未知成員 400 `UNKNOWN_MEMBER`；同名成員 409；找不到 404
+- [x] 順便修 `serveStatic` root 改絕對路徑
+- 驗證：✅ commit 5892ba2 + 修正 83595e3；主管串 `pnpm test` 31/31；bash 腳本 curl：建群、三人、三種分法、PUT、DELETE、四種壞輸入各 400 且 code 正確、404、重啟後資料仍在、SSE 收到 `changed`；餘額手算核對一致
+- 備註：第一版 members `ORDER BY created_at, id`，同毫秒建立時順序隨 UUID 浮動、餘數歸屬不確定；主管串跑測試抓到，spec 改成 rowid 後修正
 
 ## 4. 前端
 - [ ] 設計稿：手機版三區塊（header／餘額+settle／支出列表+記帳 sheet）的靜態稿，確認後才實作
