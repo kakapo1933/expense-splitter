@@ -1,21 +1,17 @@
-import { useEffect, useState } from "react";
+import { CreateGroup } from "./pages/CreateGroup";
+import { GroupPage } from "./pages/GroupPage";
+import { navigate, useRoute } from "./router";
 
 export function App() {
-  const [health, setHealth] = useState<string>("loading…");
-
-  useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((data) => setHealth(JSON.stringify(data)))
-      .catch((err: unknown) => setHealth(`error: ${String(err)}`));
-  }, []);
-
+  const route = useRoute();
+  if (route.kind === "home") return <CreateGroup />;
+  if (route.kind === "group") return <GroupPage key={route.id} id={route.id} />;
   return (
-    <main>
-      <h1>Expense Splitter</h1>
-      <p>
-        <code>GET /api/health</code> → <code>{health}</code>
-      </p>
+    <main className="center">
+      <h1>Page not found</h1>
+      <button type="button" className="btn primary block" onClick={() => navigate("/")}>
+        Go home
+      </button>
     </main>
   );
 }
