@@ -70,5 +70,5 @@
 ## 7. 新功能：還款記錄與成員離開
 - [x] 後端：`settlements` 表、`members.left_at`（ALTER TABLE 升級）、`balances`/`settleDirect` 納入還款、三個新 endpoint、42 測試全綠（commit e4cd2b3；審查用 app.db 副本驗證 Mark paid 後方案縮減、同人還款 400、left 旗標）
 - [x] 前端：settle 列 Mark paid（inline 確認）、Payments 區（可刪）、成員 chip 點開 Mark as left／Rejoin、餘額 Left 小節、sheet 內離開者放 LEFT 分隔線下預設不勾且不作預設付款人（commit e497c60；審查在 leave-test 群組 375px 實測：Mark paid 後方案 2→1 筆、B settled、Payments 出現一筆；C 標記離開後三處皆正確）
-- [ ] README 補兩個功能的取捨（還款是資料不是旗標；離開是旗標不是刪除）
+- [x] README 補兩個功能的取捨（還款是資料不是旗標；離開是旗標不是刪除）
 

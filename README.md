@@ -15,7 +15,7 @@ pnpm dev        # server on :3000, web on :5173 (proxies /api) → open http://l
 ```
 
 ```bash
-pnpm test       # 35 tests: money logic + service layer on an in-memory DB
+pnpm test       # 42 tests: money logic + service layer on an in-memory DB
 pnpm build      # web → web/dist, server → server/dist
 pnpm start      # production: one process on :3000 serving the API and the built SPA
 ```
@@ -78,6 +78,17 @@ would otherwise swap. (Found by a reviewer running the tests on a faster machine
 balances and the settlement plan. The frontend renders it and never computes money itself; the
 per-person preview inside the expense sheet is display-only and the saved result comes from the server.
 
+**Settling up is recorded as payments, not flags.** The settle-up plan is derived, so there is no
+row to tick; "Mark paid" records a settlement `from → to, amount` that enters balances like an
+expense paid by `from` whose only share is `to`. The plan is recomputed and the paid row disappears
+or shrinks. Payments are listed and deletable, so a mis-tap is one more tap.
+
+**Leaving is a flag, not a delete.** A member who leaves mid-trip keeps their history and may still
+owe or be owed, so `members.left_at` is set instead of deleting the row. Left members drop out of
+the default participants and default payer, move under a "Left" heading, stay in balances and in
+the plan until they are at zero, and can rejoin. (Added after the first real trip: a late joiner
+kept being pre-selected into dinners they were not at.)
+
 **No accounts.** Knowing the group URL (a UUID v4) is the invite. Fine for a trip with friends;
 a non-goal for this exercise.
 
@@ -90,6 +101,9 @@ POST   /api/groups/:id/members        { name }                → 201 member · 
 POST   /api/groups/:id/expenses       ExpenseInput            → 201 expense
 PUT    /api/groups/:id/expenses/:eid  ExpenseInput            → 200 expense
 DELETE /api/groups/:id/expenses/:eid                           → 204
+POST   /api/groups/:id/settlements    { fromId, toId, amount } → 201 settlement · 400 SAME_MEMBER
+DELETE /api/groups/:id/settlements/:sid                        → 204
+PATCH  /api/groups/:id/members/:mid   { left: boolean }        → 200 member
 GET    /api/groups/:id/events         text/event-stream: `hello`, then `changed` after any write
 ```
 
@@ -135,7 +149,7 @@ server/src/routes.ts       Hono routes + zod validation + SSE
 server/src/events.ts       per-group subscriber set
 web/src/useGroup.ts        fetch + EventSource → refetch
 web/src/recent.ts          recently opened groups (localStorage)
-web/src/components/        Header · SettleCard · BalancesCard · ExpenseList · ExpenseSheet
+web/src/components/        Header · SettleCard · BalancesCard · ExpenseList · PaymentsList · ExpenseSheet
 docs/SPEC.md               the spec the code was written against
 docs/TODO.md               phase-by-phase log with what was verified and what was caught
 ```
@@ -147,15 +161,16 @@ its own AI-assisted session against the written spec and reviewed by a separate 
 before moving on. That review loop caught two real bugs before the UI existed: the percent residual
 under-distributing on large totals, and member order depending on a timestamp. A round of real use
 afterwards added the IME fix (Enter during Chinese composition was adding members), the always-visible
-payer/split controls, the "pay who paid for you" settlement mode, share link and recent groups.
+payer/split controls, the "pay who paid for you" settlement mode, share link and recent groups,
+"mark paid" settlements and members leaving.
 All of it is recorded in [`docs/TODO.md`](docs/TODO.md) with the failing input or observation and
 the spec change that followed.
 
 ## What I'd do next
 
-1. **Record settlements.** A `transfer` expense kind so "Mia paid Kai $40.83" clears the balance,
-   with a "mark as paid" action on each settle-up row.
-2. **Soft delete + audit log** instead of hard delete, so a group can see who changed what.
-3. **Multi-currency** per expense with a group base currency; `currency` is already a column.
-4. **Optimistic UI** on save (today every write waits for the server and the SSE refetch).
-5. **Rate limiting / shareable-link expiry** if this ever left a friends-only context.
+1. **Soft delete + audit log** instead of hard delete, so a group can see who changed what.
+2. **Multi-currency** per expense with a group base currency; `currency` is already a column.
+3. **Optimistic UI** on save (today every write waits for the server and the SSE refetch).
+4. **Rate limiting / shareable-link expiry** if this ever left a friends-only context.
+5. **Remember participants per expense** — after someone leaves or a sub-group keeps eating
+   together, pre-select the last used set instead of "everyone active".
