@@ -57,8 +57,13 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
   餘數順序每次減一分），直到 share 加總恰等於 `total`。不變量：Σ share = total，永遠成立。
 - `splitExact(total, [{id, cents}])`：加總必須恰等於 `total`，否則 400。
 - `balances(expenses)`：每人 付出 − 應分攤。全體加總恆為 0。
-- `settle(balances)`：債權人降冪、債務人降冪排序；雙指標貪婪，每步付 `min(credit, debt)`。
-  最多 n−1 筆。不保證全域最少（那是 NP-hard）；作為取捨明講。
+- `settle(balances)`（「最少筆數」）：債權人降冪、債務人降冪排序；雙指標貪婪，每步付
+  `min(credit, debt)`。最多 n−1 筆。不保證全域最少（那是 NP-hard）；作為取捨明講。
+  債務跨全員抵銷，所以可能付錢給從未替你墊過錢的人。
+- `settleDirect(expenses)`（「還給替你付錢的人」）：對每筆支出、每個 member ≠ payer 的 split，
+  `debt[member→payer] += share`。再對每一對成員把兩個方向抵銷（`a→b − b→a`），正的一方出一筆
+  轉帳。依金額降冪、同額依成員順序。筆數比 `settle` 多，但每一筆都是還給實際替你付錢的人。
+  兩種方案總額相同、都能把所有餘額歸零。
 
 餘數一律依**成員順序**（= 插入順序，即 `members` 的 SQLite `rowid`；不用時間戳，同一毫秒會撞）給前面的成員。
 不選「給付款人」，因為前者規則更簡單、可預測。
@@ -105,7 +110,8 @@ GET    /api/groups/:id/events             SSE：任何寫入後送 `changed`
   expenses: { id, description, amountCents, payerId, splitMode, createdAt, updatedAt,
               splits: { memberId, shareCents, inputValue }[] }[],   // 新的在前
   balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed
-  settlement: { fromId, toId, cents }[]
+  settlement: { fromId, toId, cents }[],                            // 最少筆數（貪婪）
+  settlementDirect: { fromId, toId, cents }[]                       // 還給替你付錢的人
 }
 ```
 
@@ -120,7 +126,9 @@ id 一律 UUID v4（`crypto.randomUUID()`），群組 URL 不可猜。
 單頁、手機優先：
 
 1. 頂部：群組名、成員 chips、「+ 成員」。
-2. 餘額卡 + settle-up 清單（每行「A → B $12.34」）——最常看，放前面。
+2. 餘額卡 + settle-up 清單（每行「A → B $12.34」）——最常看，放前面。settle 卡有兩段切換
+   **Fewest payments / Pay who paid for you**（預設最少筆數，以 localStorage 記住每個瀏覽器的選擇）；
+   標題顯示目前模式的筆數。
 3. 支出列表；底部固定「+ 記一筆」，開 bottom sheet。
 
 記一筆的最短路徑：描述 + 金額 + 送出（付款人預設上次的人，分法預設全員平分）。

@@ -61,9 +61,15 @@ Decisions:
   Invariant: Σ share = total, always.
 - `splitExact(total, [{id, cents}])`: sum must equal `total` exactly, else 400.
 - `balances(expenses)`: per member, paid − owed. Sum over all members is always 0.
-- `settle(balances)`: sort creditors desc, debtors desc; two-pointer greedy, each step pays
-  `min(credit, debt)`. At most n−1 transfers. Not guaranteed globally minimal (that is NP-hard);
-  stated as a tradeoff.
+- `settle(balances)` ("fewest payments"): sort creditors desc, debtors desc; two-pointer greedy,
+  each step pays `min(credit, debt)`. At most n−1 transfers. Not guaranteed globally minimal (that
+  is NP-hard); stated as a tradeoff. Debts are netted across everyone, so a member may pay someone
+  who never paid for them.
+- `settleDirect(expenses)` ("pay who paid for you"): for every expense and every split whose
+  member ≠ payer, `debt[member→payer] += share`. Then for each unordered pair, net the two
+  directions (`a→b − b→a`) and emit one transfer for the positive side. Sorted by amount desc, ties
+  by member order. More transfers than `settle`, but every transfer goes to someone who actually
+  paid for you. Both plans sum to the same total and both zero every balance.
 
 Remainder cents always go to the first members in **member order** (= insertion order, i.e.
 SQLite `rowid` of `members`; never a timestamp, which can tie within a millisecond). Chosen over "give to payer" because it is simpler and predictable.
@@ -110,7 +116,8 @@ Validation (zod + group checks) → 400 with `{ error, issues }`. Unknown group/
   expenses: { id, description, amountCents, payerId, splitMode, createdAt, updatedAt,
               splits: { memberId, shareCents, inputValue }[] }[],   // newest first
   balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed
-  settlement: { fromId, toId, cents }[]
+  settlement: { fromId, toId, cents }[],                            // fewest payments (greedy)
+  settlementDirect: { fromId, toId, cents }[]                       // pay who paid for you
 }
 ```
 
@@ -125,7 +132,9 @@ No auth: knowing the group URL is the invite.
 One page, mobile-first:
 
 1. Header: group name, member chips, "+ member".
-2. Balances card + settle-up list ("A → B $12.34" per line) — most-read, so near the top.
+2. Balances card + settle-up list ("A → B $12.34" per line) — most-read, so near the top. The
+   settle card has a two-way toggle **Fewest payments / Pay who paid for you** (default: fewest,
+   remembered per browser in localStorage); the header shows the payment count for the active mode.
 3. Expense list; fixed bottom "+ Add expense" opening a bottom sheet.
 
 Fastest path to log an expense: description + amount + submit (payer defaults to last used,
