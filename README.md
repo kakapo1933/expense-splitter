@@ -15,12 +15,16 @@ pnpm dev        # server on :3000, web on :5173 (proxies /api) → open http://l
 ```
 
 ```bash
-pnpm test       # 31 tests: money logic + service layer on an in-memory DB
+pnpm test       # 35 tests: money logic + service layer on an in-memory DB
 pnpm build      # web → web/dist, server → server/dist
 pnpm start      # production: one process on :3000 serving the API and the built SPA
 ```
 
 Environment: `PORT` (default 3000), `DB_PATH` (default `server/data/app.db`, created on first run).
+
+To try the live-update behaviour, open the same group URL in a second browser. To try it from a
+phone on the same Wi-Fi, Vite is bound to all interfaces: open `http://<your-LAN-IP>:5173` and
+share the group link from there.
 
 ## Stack
 
@@ -47,9 +51,16 @@ fully unit-tested, and the only place that knows the rounding rules:
   because of that tolerance the residual can be several cents or negative on large totals, and the
   distribution loops until shares sum to the total exactly. `$1000 at 33.33 × 3 → 333.34, 333.33, 333.33`.
 - *Exact*: shares must sum to the total to the cent, else 400.
-- *Settle up*: creditors and debtors sorted by size, two-pointer greedy, each step clears the
-  smaller side. At most n − 1 transfers. This is not guaranteed globally minimal (that problem is
-  NP-hard); it is the same heuristic the well-known apps use and is predictable for users.
+- *Settle up — fewest payments* (`settle`): creditors and debtors sorted by size, two-pointer
+  greedy, each step clears the smaller side. At most n − 1 transfers. Not guaranteed globally
+  minimal (that problem is NP-hard); it is the heuristic the well-known apps use. Because it nets
+  debts across everyone, you can end up paying someone who never paid for you — the first real
+  user of this app found that confusing (Tricount's FAQ has to explain the same thing), so there is
+  also:
+- *Settle up — pay who paid for you* (`settleDirect`): per expense, each non-payer owes the payer
+  their share; the two directions of every pair are netted and one transfer is emitted. More
+  transfers, larger total, but every transfer goes to someone who actually covered you. The API
+  returns both plans; the settle card toggles between them (default: fewest). Both zero every balance.
 
 **Balances are derived, never stored.** `balance = Σ paid − Σ share`, recomputed from
 `expenses` + `expense_splits` on every read. Editing an expense replaces its row and its splits in
@@ -106,6 +117,10 @@ equally" summary row tested as too easy to miss). Balances use colour *and* sign
 settle-up card sits above balances because "who pays whom" is the question people open the app for.
 The sheet previews each person's share and says where the odd cent goes.
 
+No accounts, so the group URL is the invite: the header has a **Share** button (`navigator.share`
+on phones, clipboard elsewhere) and a link back to `/`, which lists the groups this browser has
+opened (localStorage — it does not follow you across devices; that is what sign-in would add).
+
 The design was researched before it was built — see [`docs/design/research.md`](docs/design/research.md)
 for the conventions borrowed from Splitwise / Tricount / Settle Up and the ones deliberately dropped,
 and [`docs/design/mockup.html`](docs/design/mockup.html) for the static mockup the UI follows.
@@ -119,6 +134,7 @@ server/src/service.ts      transactions, group checks, view assembly (+ service.
 server/src/routes.ts       Hono routes + zod validation + SSE
 server/src/events.ts       per-group subscriber set
 web/src/useGroup.ts        fetch + EventSource → refetch
+web/src/recent.ts          recently opened groups (localStorage)
 web/src/components/        Header · SettleCard · BalancesCard · ExpenseList · ExpenseSheet
 docs/SPEC.md               the spec the code was written against
 docs/TODO.md               phase-by-phase log with what was verified and what was caught
@@ -129,8 +145,11 @@ docs/TODO.md               phase-by-phase log with what was verified and what wa
 Spec first, then four phases (scaffold → money logic → persistence/API → UI), each implemented in
 its own AI-assisted session against the written spec and reviewed by a separate "lead" session
 before moving on. That review loop caught two real bugs before the UI existed: the percent residual
-under-distributing on large totals, and member order depending on a timestamp. Both are recorded in
-[`docs/TODO.md`](docs/TODO.md) with the failing input and the spec change that fixed them.
+under-distributing on large totals, and member order depending on a timestamp. A round of real use
+afterwards added the IME fix (Enter during Chinese composition was adding members), the always-visible
+payer/split controls, the "pay who paid for you" settlement mode, share link and recent groups.
+All of it is recorded in [`docs/TODO.md`](docs/TODO.md) with the failing input or observation and
+the spec change that followed.
 
 ## What I'd do next
 
