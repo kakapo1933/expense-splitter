@@ -69,7 +69,8 @@ Decisions:
   member ≠ payer, `debt[member→payer] += share`. Then for each unordered pair, net the two
   directions (`a→b − b→a`) and emit one transfer for the positive side. Sorted by amount desc, ties
   by member order. More transfers than `settle`, but every transfer goes to someone who actually
-  paid for you. Both plans sum to the same total and both zero every balance.
+  paid for you. Its total is usually larger than `settle`'s (debts are only netted per pair, not
+  across everyone), but both plans zero every balance.
 
 Remainder cents always go to the first members in **member order** (= insertion order, i.e.
 SQLite `rowid` of `members`; never a timestamp, which can tie within a millisecond). Chosen over "give to payer" because it is simpler and predictable.
