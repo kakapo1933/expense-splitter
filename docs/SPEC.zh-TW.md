@@ -17,7 +17,7 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 - 資料撐過重啟（SQLite）。兩個瀏覽器互相看得到變更（SSE）。
 
 範圍外（README 的「next steps」）：登入與權限、多幣別、soft delete + audit log、離線、
-記錄「已結清」、全域最少筆數的 settle 演算法。
+全域最少筆數的 settle 演算法。
 
 ## 技術棧
 
@@ -33,9 +33,10 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 | 表               | 欄位                                                                                                        |
 |------------------|-------------------------------------------------------------------------------------------------------------|
 | `groups`         | id, name, currency（先固定 `USD`）, created_at                                                              |
-| `members`        | id, group_id, name, created_at — (group_id, name) 唯一；依 `rowid`（插入順序）排序                           |
+| `members`        | id, group_id, name, created_at, left_at（可空）— (group_id, name) 唯一；依 `rowid`（插入順序）排序           |
 | `expenses`       | id, group_id, payer_id, description, amount_cents, split_mode（`equal`/`exact`/`percent`）, created_at, updated_at |
 | `expense_splits` | expense_id, member_id, share_cents, input_value — PK (expense_id, member_id)                                |
+| `settlements`    | id, group_id, from_id, to_id, amount_cents, created_at — 一筆成員對成員的實際還款                           |
 
 決策：
 
@@ -45,6 +46,12 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
   結果在寫入時算一次；輸入讓編輯表單能回填（例如再次顯示「33.33%」）。
 - 編輯 = 在同一個 transaction 內取代 expense 列、刪除並重插它的 splits。
 - 刪除 = 真刪（cascade 到 splits）。
+- **還款是一筆資料，不是打勾。** settle 方案是算出來的，沒有固定的列可以標記；「Mark paid」
+  寫入一筆還款 `from → to, amount`。還款進餘額的方式等同「from 付了一筆、唯一分攤者是 to」
+  （from +amount、to −amount）。方案從新餘額重算，付過的那列會消失或縮小。還款可刪（按錯）。
+- **離開是旗標，不是刪除。** 中途離開的成員歷史還在、可能仍欠或被欠。`left_at` 設定後：
+  新支出的預設參與者與預設付款人排除他、餘額區放到「Left」小節、仍可手動勾選、仍在餘額與
+  方案裡直到歸零。可復原（`left_at = null`）。
 
 ## 金額邏輯（`server/src/money.ts`，純函式，不碰 DB）
 
@@ -56,7 +63,7 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
   按 33.33 × 3 會剩 7 分）或為負（加總 100.01）：依最大餘數順序循環每次加一分（為負時依最小
   餘數順序每次減一分），直到 share 加總恰等於 `total`。不變量：Σ share = total，永遠成立。
 - `splitExact(total, [{id, cents}])`：加總必須恰等於 `total`，否則 400。
-- `balances(expenses)`：每人 付出 − 應分攤。全體加總恆為 0。
+- `balances(expenses, settlements)`：每人 付出 − 應分攤，還款視為 `from` 付出、`to` 應分攤。全體加總恆為 0。
 - `settle(balances)`（「最少筆數」）：債權人降冪、債務人降冪排序；雙指標貪婪，每步付
   `min(credit, debt)`。最多 n−1 筆。不保證全域最少（那是 NP-hard）；作為取捨明講。
   債務跨全員抵銷，所以可能付錢給從未替你墊過錢的人。
@@ -77,6 +84,9 @@ POST   /api/groups/:id/members            { name }                         → m
 POST   /api/groups/:id/expenses           ExpenseInput                     → expense
 PUT    /api/groups/:id/expenses/:eid      ExpenseInput                     → expense
 DELETE /api/groups/:id/expenses/:eid                                       → 204
+POST   /api/groups/:id/settlements        { fromId, toId, amount }        → 201 settlement（from ≠ to，皆屬群組）
+DELETE /api/groups/:id/settlements/:sid                                   → 204
+PATCH  /api/groups/:id/members/:mid       { left: boolean }               → 200 member（設定／清除 left_at）
 GET    /api/groups/:id/events             SSE：任何寫入後送 `changed`
 ```
 
@@ -106,10 +116,11 @@ GET    /api/groups/:id/events             SSE：任何寫入後送 `changed`
 ```ts
 {
   group: { id, name, currency, createdAt },
-  members: { id, name, createdAt }[],              // 依成員順序
+  members: { id, name, createdAt, leftAt }[],      // 依成員順序；leftAt 為 null = 在籍
   expenses: { id, description, amountCents, payerId, splitMode, createdAt, updatedAt,
               splits: { memberId, shareCents, inputValue }[] }[],   // 新的在前
-  balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed
+  settlements: { id, fromId, toId, amountCents, createdAt }[],      // 新的在前
+  balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed（支出 + 還款）
   settlement: { fromId, toId, cents }[],                            // 最少筆數（貪婪）
   settlementDirect: { fromId, toId, cents }[]                       // 還給替你付錢的人
 }
@@ -128,7 +139,11 @@ id 一律 UUID v4（`crypto.randomUUID()`），群組 URL 不可猜。
 1. 頂部：群組名、成員 chips、「+ 成員」。
 2. 餘額卡 + settle-up 清單（每行「A → B $12.34」）——最常看，放前面。settle 卡有兩段切換
    **Fewest payments / Pay who paid for you**（預設最少筆數，以 localStorage 記住每個瀏覽器的選擇）；
-   標題顯示目前模式的筆數。
+   標題顯示目前模式的筆數。每一列有 **Mark paid** 動作，記下正好那一列的還款（inline 確認，
+   同刪除）。已記的還款列在支出下方的 **Payments** 區，每筆可刪。餘額區先列在籍成員，
+   有人離開時再加 **Left** 小標。成員 chips：離開者的 chip 變淡、點開有 inline「Rejoin」；
+   在籍者點開有「Mark as left」。記帳 sheet 內離開者預設不勾、不作預設付款人，但仍可在
+   「Left」分隔線下勾選。
 3. 支出列表；底部固定「+ 記一筆」，開 bottom sheet。
 
 記一筆的最短路徑：描述 + 金額 + 送出（付款人預設上次的人，分法預設全員平分）。

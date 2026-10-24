@@ -18,7 +18,7 @@ people using the app in different browsers see each other's changes.
 - Data survives restart (SQLite). Two browsers see each other's changes (SSE).
 
 Out of scope (README "next steps"): auth/permissions, multi-currency, soft delete + audit log,
-offline, recording settlements as paid, globally-minimal settlement.
+offline, globally-minimal settlement.
 
 ## Stack
 
@@ -34,9 +34,10 @@ All money columns are **integer cents**.
 | Table            | Columns                                                                                                     |
 |------------------|-------------------------------------------------------------------------------------------------------------|
 | `groups`         | id, name, currency (fixed `USD` for now), created_at                                                        |
-| `members`        | id, group_id, name, created_at — unique (group_id, name); ordered by `rowid` (insertion order)                |
+| `members`        | id, group_id, name, created_at, left_at (nullable) — unique (group_id, name); ordered by `rowid` (insertion order) |
 | `expenses`       | id, group_id, payer_id, description, amount_cents, split_mode (`equal`/`exact`/`percent`), created_at, updated_at |
 | `expense_splits` | expense_id, member_id, share_cents, input_value — PK (expense_id, member_id)                                |
+| `settlements`    | id, group_id, from_id, to_id, amount_cents, created_at — a recorded payment from one member to another     |
 
 Decisions:
 
@@ -47,6 +48,14 @@ Decisions:
   round-trip (e.g. show "33.33%" again).
 - Edit = replace expense row + delete and re-insert its splits in one transaction.
 - Delete = hard delete (cascade splits).
+- **Settlements are payments, not flags.** The settle-up plan is derived, so "mark as paid" cannot
+  flag a plan row; it records a payment `from → to, amount`. A settlement enters balances like an
+  expense paid by `from` whose only split is `to` (from +amount, to −amount). The plan is recomputed
+  from the new balances, so the paid row disappears or shrinks. Settlements can be deleted (mis-tap).
+- **Leaving is a flag, not a delete.** A member who leaves mid-trip keeps their history and may
+  still owe or be owed. `left_at` set → excluded from the default participants and default payer of
+  new expenses, shown under a "Left" heading, still selectable by hand, still in balances and in the
+  plan until they are at zero. Reversible (`left_at = null`).
 
 ## Money logic (`server/src/money.ts`, pure, no DB)
 
@@ -60,7 +69,8 @@ Decisions:
   the smallest-remainder order) one cent at a time until the shares sum to `total` exactly.
   Invariant: Σ share = total, always.
 - `splitExact(total, [{id, cents}])`: sum must equal `total` exactly, else 400.
-- `balances(expenses)`: per member, paid − owed. Sum over all members is always 0.
+- `balances(expenses, settlements)`: per member, paid − owed, where a settlement counts as
+  `from` paid and `to` owed. Sum over all members is always 0.
 - `settle(balances)` ("fewest payments"): sort creditors desc, debtors desc; two-pointer greedy,
   each step pays `min(credit, debt)`. At most n−1 transfers. Not guaranteed globally minimal (that
   is NP-hard); stated as a tradeoff. Debts are netted across everyone, so a member may pay someone
@@ -84,6 +94,9 @@ POST   /api/groups/:id/members            { name }                         → m
 POST   /api/groups/:id/expenses           ExpenseInput                     → expense
 PUT    /api/groups/:id/expenses/:eid      ExpenseInput                     → expense
 DELETE /api/groups/:id/expenses/:eid                                       → 204
+POST   /api/groups/:id/settlements        { fromId, toId, amount }        → 201 settlement (from ≠ to, both in group)
+DELETE /api/groups/:id/settlements/:sid                                   → 204
+PATCH  /api/groups/:id/members/:mid       { left: boolean }               → 200 member (sets/clears left_at)
 GET    /api/groups/:id/events             SSE: `changed` after any write
 ```
 
@@ -113,10 +126,11 @@ Validation (zod + group checks) → 400 with `{ error, issues }`. Unknown group/
 ```ts
 {
   group: { id, name, currency, createdAt },
-  members: { id, name, createdAt }[],              // in member order
+  members: { id, name, createdAt, leftAt }[],      // in member order; leftAt null = active
   expenses: { id, description, amountCents, payerId, splitMode, createdAt, updatedAt,
               splits: { memberId, shareCents, inputValue }[] }[],   // newest first
-  balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed
+  settlements: { id, fromId, toId, amountCents, createdAt }[],      // newest first
+  balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed (expenses + settlements)
   settlement: { fromId, toId, cents }[],                            // fewest payments (greedy)
   settlementDirect: { fromId, toId, cents }[]                       // pay who paid for you
 }
@@ -136,6 +150,13 @@ One page, mobile-first:
 2. Balances card + settle-up list ("A → B $12.34" per line) — most-read, so near the top. The
    settle card has a two-way toggle **Fewest payments / Pay who paid for you** (default: fewest,
    remembered per browser in localStorage); the header shows the payment count for the active mode.
+   Each plan row has a **Mark paid** action that records a settlement for exactly that row (confirm
+   inline, like delete). Recorded payments are listed in a **Payments** section under expenses,
+   each deletable. Balances show active members first, then a **Left** subheading for members with
+   `leftAt` (only if any). Member chips: a left member's chip is dimmed and opens an inline
+   "Rejoin" action; an active member's chip opens "Mark as left". In the expense sheet, left
+   members are not pre-selected and not the default payer, but remain selectable under a "Left"
+   divider.
 3. Expense list; fixed bottom "+ Add expense" opening a bottom sheet.
 
 Fastest path to log an expense: description + amount + submit (payer defaults to last used,

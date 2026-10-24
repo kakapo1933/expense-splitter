@@ -67,3 +67,8 @@
 - [x] 群組頁沒有回首頁的入口，無法離開去建新群組 → header 加回 `/` 的連結（併入 web-polish）
 - 驗證（第 6 節後四項）：✅ commit 301e807 + 0d27d4c；主管串：Vite 聽 `*:5173`、`http://192.168.0.120:5173/api/health` 經 proxy 回 ok；首頁 Recent groups 有「吃飯飯」可點回；「‹ Groups」連結回首頁；Share 桌面顯示 Link copied（手機模擬走 navigator.share，面板不可見）；375px sheet 捲到底提示完整；direct 模式卡卡只剩 → cindy $400
 
+## 7. 新功能：還款記錄與成員離開
+- [ ] 後端：`settlements` 表、`members.left_at`、`balances` 納入還款、三個新 endpoint、測試（session）
+- [ ] 前端：settle 列 Mark paid、Payments 區、成員 Left／Rejoin、sheet 內離開者預設排除、餘額 Left 小節（session，等後端完成）
+- [ ] README 補兩個功能的取捨（還款是資料不是旗標；離開是旗標不是刪除）
+
