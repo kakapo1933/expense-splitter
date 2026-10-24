@@ -169,7 +169,12 @@ the spec change that followed.
 ## What I'd do next
 
 1. **Soft delete + audit log** instead of hard delete, so a group can see who changed what.
-2. **Multi-currency** per expense with a group base currency; `currency` is already a column.
+2. **Currency and precision per group.** `currency` is already a column; the missing piece is a
+   per-group `decimals` (TWD/JPY 0, most 2, BHD 3). Everything in `money.ts` is integer arithmetic
+   on the minor unit, so only `parseAmount` and the display formatter hard-code 2 — set at group
+   creation, it is a small change; changeable later, it means re-splitting history from the stored
+   `input_value`, which `exact` inputs with too many decimals cannot survive. (Asked for by the first
+   real users: with 0 decimals `$100 / 3` reads 34 / 33 / 33 and the odd cent question disappears.)
 3. **Optimistic UI** on save (today every write waits for the server and the SSE refetch).
 4. **Rate limiting / shareable-link expiry** if this ever left a friends-only context.
 5. **Remember participants per expense** — after someone leaves or a sub-group keeps eating
