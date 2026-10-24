@@ -53,8 +53,8 @@ William 出的 take-home（截止 2026-10-25）。目標：一小時內完成、
 - `settle(balances)`：債權人降冪、債務人降冪排序；雙指標貪婪，每步付 `min(credit, debt)`。
   最多 n−1 筆。不保證全域最少（那是 NP-hard）；作為取捨明講。
 
-待定點：餘數給前面的成員（Splitwise 作法）還是給付款人。
-預設：前面的成員——規則簡單、可預測。
+餘數一律依**成員順序**（= 加入順序：`created_at`，再以 id 決勝）給前面的成員。
+不選「給付款人」，因為前者規則更簡單、可預測。
 
 ## API
 
@@ -81,8 +81,30 @@ GET    /api/groups/:id/events             SSE：任何寫入後送 `changed`
 }
 ```
 
-驗證（zod）失敗 → 400 回 `{ error, issues }`。id 不存在 → 404。所有計算都在後端；
-前端只渲染 `GET /api/groups/:id` 回的東西。
+驗證（zod + 群組檢查）失敗 → 400 回 `{ error, issues }`。群組／支出不存在 → 404。
+
+- `amount`：`^\d+(\.\d{1,2})?$`，> 0，≤ 10,000,000.00。
+- `description`：去頭尾空白後 1..200 字。`name`（群組／成員）：去頭尾空白後 1..50 字。
+- `payerId` 與 `split` 內每個 `memberId` 都必須屬於該群組；split 內成員不可重複。
+- `equal`：至少一人。`percent`：每個最多兩位小數、≥ 0、加總 = 100 ± 0.01。
+  `exact`：每個 ≥ 0、加總 = amount。
+
+`GET /api/groups/:id` 回傳：
+
+```ts
+{
+  group: { id, name, currency, createdAt },
+  members: { id, name, createdAt }[],              // 依成員順序
+  expenses: { id, description, amountCents, payerId, splitMode, createdAt, updatedAt,
+              splits: { memberId, shareCents, inputValue }[] }[],   // 新的在前
+  balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed
+  settlement: { fromId, toId, cents }[]
+}
+```
+
+所有計算都在後端；前端只渲染這個 payload。
+id 一律 UUID v4（`crypto.randomUUID()`），群組 URL 不可猜。
+成員不能改名或刪除（刪了會讓它的 splits 失去歸屬）——列為範圍外。
 
 不做登入：知道群組 URL 就等於受邀。
 
@@ -97,4 +119,18 @@ GET    /api/groups/:id/events             SSE：任何寫入後送 `changed`
 記一筆的最短路徑：描述 + 金額 + 送出（付款人預設上次的人，分法預設全員平分）。
 金額欄用 `inputmode="decimal"`。
 
-同步：收到 SSE `changed` 就重抓 `GET /api/groups/:id`。
+路由：`/` 建群組（完成後導向）；`/g/:id` 群組頁。群組 URL 就是邀請連結。
+
+同步：收到 SSE `changed` 就重抓 `GET /api/groups/:id`。`EventSource` 自動重連；重連後重抓一次。
+
+## 執行方式
+
+- `pnpm install && pnpm dev` — server 在 :3000，Vite 在 :5173 並 proxy `/api`。
+- `pnpm test` — 金額模組測試。`pnpm build && pnpm start` — server 直接 serve `web/dist`。
+- SQLite 檔在 `server/data/app.db`；可用 `PORT`、`DB_PATH` 環境變數覆蓋。
+
+## 為現場加功能預留（不實作）
+
+可能的題目：記錄「已結清」、多幣別、分攤之上加小費／稅。讓 `money.ts` 保持純函式、
+`expenses` 可擴充（例如未來的 `kind` 欄位），任何一題都是「新增一個函式 + 一個 migration」，
+不是重寫。

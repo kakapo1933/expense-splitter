@@ -56,8 +56,8 @@ Decisions:
   `min(credit, debt)`. At most n−1 transfers. Not guaranteed globally minimal (that is NP-hard);
   stated as a tradeoff.
 
-Open points (to confirm): remainder goes to first members (Splitwise behaviour) vs. the payer.
-Default: first members — simpler, predictable.
+Remainder cents always go to the first members in **member order** (= join order: `created_at`,
+then id). Chosen over "give to payer" because it is simpler and predictable.
 
 ## API
 
@@ -84,8 +84,30 @@ GET    /api/groups/:id/events             SSE: `changed` after any write
 }
 ```
 
-Validation (zod) → 400 with `{ error, issues }`. Unknown ids → 404. All calculation lives in the
-backend; the frontend only renders what `GET /api/groups/:id` returns.
+Validation (zod + group checks) → 400 with `{ error, issues }`. Unknown group/expense → 404.
+
+- `amount`: `^\d+(\.\d{1,2})?$`, > 0, ≤ 10,000,000.00.
+- `description`: trimmed, 1..200 chars. `name` (group/member): trimmed, 1..50 chars.
+- `payerId` and every `memberId` in `split` must belong to the group; no duplicate members in a split.
+- `equal`: at least one member. `percent`: each ≤ 2 decimals, ≥ 0, sum = 100 ± 0.01.
+  `exact`: each ≥ 0, sum = amount.
+
+`GET /api/groups/:id` response:
+
+```ts
+{
+  group: { id, name, currency, createdAt },
+  members: { id, name, createdAt }[],              // in member order
+  expenses: { id, description, amountCents, payerId, splitMode, createdAt, updatedAt,
+              splits: { memberId, shareCents, inputValue }[] }[],   // newest first
+  balances: { memberId, paidCents, owedCents, netCents }[],         // net = paid − owed
+  settlement: { fromId, toId, cents }[]
+}
+```
+
+All calculation lives in the backend; the frontend only renders this payload.
+Ids are UUID v4 (`crypto.randomUUID()`), so group URLs are not guessable.
+Members cannot be renamed or deleted (deleting one would orphan its splits) — out of scope.
 
 No auth: knowing the group URL is the invite.
 
@@ -100,4 +122,19 @@ One page, mobile-first:
 Fastest path to log an expense: description + amount + submit (payer defaults to last used,
 split defaults to equal across all members). `inputmode="decimal"` on amount.
 
-Sync: on SSE `changed`, refetch `GET /api/groups/:id`.
+Routes: `/` create a group (then redirect); `/g/:id` group page. The group URL is the invite link.
+
+Sync: on SSE `changed`, refetch `GET /api/groups/:id`. `EventSource` reconnects on its own;
+refetch once after reconnect.
+
+## Running
+
+- `pnpm install && pnpm dev` — server on :3000, Vite on :5173 proxying `/api`.
+- `pnpm test` — money module tests. `pnpm build && pnpm start` — server serves `web/dist`.
+- SQLite file at `server/data/app.db`; `PORT` and `DB_PATH` env override.
+
+## Reserved for the live-interview extension (not implemented)
+
+Likely asks: record a settlement as paid, multi-currency, tip/tax on top of a split. Keep
+`money.ts` pure and `expenses` extensible (e.g. a future `kind` column) so any of these is a
+new function + one migration, not a rewrite.
