@@ -2,6 +2,9 @@
 
 依 `SPEC.md` 分段實作；每段完成就在這裡打勾並註記驗證方式。即時更新。
 
+分工：本對話串（主管）負責需求、文件、驗收與更新本檔；每一段開發各開一個新的對話串執行，
+開發串只動自己那段的程式碼、不改 `docs/`，完成後自行 commit。
+
 ## 0. 設計
 - [x] 技術棧定案：Hono + `node:sqlite` + Vite React（commit 8d04f8a）
 - [x] 規格寫成 `docs/SPEC.md` / `docs/SPEC.zh-TW.md`（commit 5056f00）
@@ -32,6 +35,7 @@
 - 驗證：curl 建群、加人、記三種分法、改、刪；重啟 server 後 `GET` 資料仍在；`curl -N /events` 看得到廣播
 
 ## 4. 前端
+- [ ] 設計稿：手機版三區塊（header／餘額+settle／支出列表+記帳 sheet）的靜態稿，確認後才實作
 - [ ] `/` 建群組 → 導向 `/g/:id`
 - [ ] `/g/:id`：header（群名、成員 chips、+ 成員）
 - [ ] 餘額卡 + settle-up 清單
