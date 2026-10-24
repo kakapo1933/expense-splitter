@@ -5,6 +5,12 @@ by name, log expenses (paid by whom, how much, split equally / by exact amounts 
 and see each person's balance plus a settle-up plan. Expenses can be edited or deleted; data lives
 in SQLite; two browsers on the same group see each other's changes live.
 
+<p align="center">
+  <img src="docs/screenshots/group.jpg" width="300" alt="Group page: settle-up plan, balances, expenses">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/add-expense.jpg" width="300" alt="Add expense sheet: $100 split three ways, extra cent goes to Kai">
+</p>
+
 ## Run it
 
 Requires Node ≥ 24 and pnpm (`corepack enable` gives you pnpm).
