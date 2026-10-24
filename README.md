@@ -86,7 +86,7 @@ or shrinks. Payments are listed and deletable, so a mis-tap is one more tap.
 **Leaving is a flag, not a delete.** A member who leaves mid-trip keeps their history and may still
 owe or be owed, so `members.left_at` is set instead of deleting the row. Left members drop out of
 the default participants and default payer, move under a "Left" heading, stay in balances and in
-the plan until they are at zero, and can rejoin. (Added after the first real trip: a late joiner
+the plan until they are at zero, and can rejoin. (Added after the first real group: a late joiner
 kept being pre-selected into dinners they were not at.)
 
 **No accounts.** Knowing the group URL (a UUID v4) is the invite. Fine for a trip with friends;
