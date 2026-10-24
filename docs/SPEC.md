@@ -16,6 +16,8 @@ people using the app in different browsers see each other's changes.
 - Show each member's balance and a settle-up plan.
 - Edit / delete expenses; balances follow.
 - Data survives restart (SQLite). Two browsers see each other's changes (SSE).
+- Settle-up rows can be marked as paid (recorded settlements, deletable).
+- A member can leave and rejoin; a left member keeps history and balances but is no longer pre-selected.
 
 Out of scope (README "next steps"): auth/permissions, multi-currency, soft delete + audit log,
 offline, globally-minimal settlement.

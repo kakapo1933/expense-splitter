@@ -65,8 +65,8 @@
 
 - **Settle Up 的圓圈視覺**（2.4）：圓圈大小表債務需要動畫與版面計算，一小時作業不值得；且面積比較不如數字精確。
 - **shares／adjustment 分法**（3.1、3.4）：SPEC 只要三種；shares 可用 percent 表達，adjustment 可用 exact。
-- **Mark as paid / 記錄還款**（2.6）：SPEC 列為 out of scope，但設計稿在 settle 列預留右側空位，現場加功能時放按鈕即可。
-- **simplify debts 可開關**（2.5）：後端只有 greedy 一種結果，前端不做切換；在 settle 標題註明「fewest payments」即可。
+- ~~**Mark as paid / 記錄還款**（2.6）~~ → **後來採用**：原本 SPEC 列為 out of scope，設計稿只在 settle 列預留右側空位；實際使用後加回來，做法是記錄一筆還款（資料）而非打勾（旗標），按鈕就放在預留的位置。
+- ~~**simplify debts 可開關**（2.5）~~ → **後來採用**：原本只有 greedy 一種；實際使用時「要付錢給沒替我付過錢的人」被認為看不懂（與 2.2 Tricount 需要在 FAQ 解釋的是同一件事），加了「Pay who paid for you」模式與 segmented 切換，預設仍是 fewest payments。
 - **複製一筆支出**（1.4）：有用但非評分重點，列為 nice-to-have。
 
 ### 待確認
