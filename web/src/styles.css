@@ -53,9 +53,9 @@ input::placeholder { color: var(--muted); }
 .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
 h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; letter-spacing: -.01em; line-height: 1.2; overflow-wrap: anywhere; }
 .sub { color: var(--muted); font-size: var(--fs-sm); margin: 2px 0 var(--sp-3); }
-.live { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--muted); padding: 3px 8px; border-radius: var(--radius-pill); background: var(--card); border: 1px solid var(--line); white-space: nowrap; margin-top: 3px; flex: none; }
+.live { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--muted); padding: 3px 8px; border-radius: var(--radius-pill); background: var(--card); border: 1px solid var(--line); white-space: nowrap; flex: none; }
 .hdr-right { display: flex; align-items: center; gap: 6px; flex: none; }
-.share { min-width: var(--tap); min-height: var(--tap); padding: 0 12px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--card); color: var(--accent); font-size: var(--fs-sm); font-weight: 600; }
+.share { min-height: 24px; padding: 3px 10px; line-height: 1.2; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--card); color: var(--accent); font-size: var(--fs-sm); font-weight: 600; }
 .share.done { color: var(--pos); border-color: var(--pos); }
 .share-fallback { margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--ink-2); }
 .share-fallback input { width: 100%; margin-top: 4px; font-size: 13px; }
