@@ -2,6 +2,7 @@
 
 Take-home from William (deadline 2026-10-25). Target: < 1 hour, working core + clear tradeoffs.
 This file records the design agreed before writing code. The README summarises it for reviewers.
+**Keep in sync with `SPEC.zh-TW.md`.**
 
 ## Scope
 
