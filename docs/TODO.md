@@ -55,3 +55,9 @@
 - [x] `.gitignore` 排除 db 與 dist；全新 clone 後 `git ls-files` 無 .db
 - [x] 推到 GitHub：https://github.com/kakapo1933/expense-splitter（public）；主管串從全新 clone 跑 `pnpm install && pnpm test && pnpm build` 31/31 綠、build 過
 - [ ] 回信附連結
+
+## 6. 使用者實測後的修正
+- [x] 中文輸入法選字的 Enter 被當成加成員 → 三處 onKeyDown 加 `isComposingEnter` 守衛（commit 007cc81）
+- [x] 記帳 sheet「X paid · split equally」摺疊列像提示文字、易忽略 → 付款人／分法預設展開、Cancel/Save sticky（commit 6997089；research.md 與 README 同步改）
+- [ ] 回報「後面新增的人被算進前面平分的帳」：主管串以 API 與 UI 各重現一次（兩人群組 → $100 平分 → 加第三人 → 編輯舊支出）均未重現，新成員餘額 0、舊支出回填不含新成員；等使用者提供實際步驟
+
