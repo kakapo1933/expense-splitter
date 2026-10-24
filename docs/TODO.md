@@ -51,6 +51,7 @@
 - 備註：exact 模式主管串未親測（web session 有截圖 `sheet-exact-desktop.jpg`，API 層已 curl 驗過）
 
 ## 5. 交付
-- [ ] README：安裝與執行、設計決策（從 SPEC 濃縮）、取捨、next steps
-- [ ] 整理 commit、確認 `.gitignore` 排除 db 與 dist
-- [ ] 推到 GitHub，回信附連結
+- [x] README：安裝與執行、設計決策（從 SPEC 濃縮）、取捨、next steps（commit b2b9b73，逐項對過程式碼）
+- [x] `.gitignore` 排除 db 與 dist；全新 clone 後 `git ls-files` 無 .db
+- [x] 推到 GitHub：https://github.com/kakapo1933/expense-splitter（public）；主管串從全新 clone 跑 `pnpm install && pnpm test && pnpm build` 31/31 綠、build 過
+- [ ] 回信附連結
