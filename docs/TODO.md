@@ -10,11 +10,12 @@
 - [x] 規格寫成 `docs/SPEC.md` / `docs/SPEC.zh-TW.md`（commit 5056f00）
 
 ## 1. Scaffold
-- [ ] pnpm workspace：根 `package.json`、`pnpm-workspace.yaml`
-- [ ] `server/`：Hono + `@hono/node-server`、tsconfig、`src/index.ts` 含 `GET /api/health`
-- [ ] `web/`：Vite + React + TS，`vite.config.ts` proxy `/api` → :3000
-- [ ] 根指令：`pnpm dev`（同時起兩邊）、`pnpm test`、`pnpm build`、`pnpm start`
-- 驗證：`pnpm install && pnpm dev` 跑起來，`curl :3000/api/health` 回 `{"ok":true}`，:5173 開得出空白頁
+- [x] pnpm workspace：根 `package.json`、`pnpm-workspace.yaml`
+- [x] `server/`：Hono + `@hono/node-server`、tsconfig、`src/index.ts` 含 `GET /api/health`（dev 用 tsx watch）
+- [x] `web/`：Vite + React + TS，`vite.config.ts` proxy `/api` → :3000
+- [x] 根指令：`pnpm dev`、`pnpm test`、`pnpm build`、`pnpm start`
+- 驗證：✅ commit 7751bfb；主管串重測 `curl :3999/api/health` 回 `{"ok":true}`、`pnpm build` 過
+- 備註：`serveStatic` root 用 cwd 相對路徑換算，從非專案目錄啟動 production 可能失效 → 第 3 段修
 
 ## 2. 金額邏輯（`server/src/money.ts`）
 - [ ] `parseAmount("12.34") → 1234`，拒絕非法字串
