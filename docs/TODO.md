@@ -61,7 +61,9 @@
 - [x] 記帳 sheet「X paid · split equally」摺疊列像提示文字、易忽略 → 付款人／分法預設展開、Cancel/Save sticky（commit 6997089；research.md 與 README 同步改）
 - [x] 回報「後面新增的人被算進前面平分的帳」→ 查 `server/data/app.db`：阿咪在所有支出前加入、卡卡只出現在加入後的「電影」，沒有任何支出含記帳當時不存在的成員。實際是「加人後新支出預設全員平分」的 UX 預期落差，非計算錯誤；維持預設全員，README next steps 考慮加「記住上次參與者」
 - [x] 加 Settle 切換 Fewest payments / Pay who paid for you（commit ac91c10；35 測試全綠；主管串在「吃飯飯」確認兩種方案都讓餘額歸零，direct 14 筆 vs fewest 5 筆；spec 原寫「總額相同」有誤已改）
-- [ ] 記帳 sheet：捲動區底部被 sticky footer 壓到，最後一行（提示／預覽）看不清 → 捲動區加 padding-bottom ≥ footer 高度；平分提示改「Tap a name to exclude or include them.」
-- [ ] 群組頁缺「Copy link / Share」按鈕（建群頁寫 Share the link afterwards 但沒地方複製）；Vite 只聽 localhost，手機同網段連不到 → `server.host: true` + README 寫手機測試步驟（等 settle-direct 完成後開 session）
-- [ ] 首頁列出「最近的群組」（localStorage，每瀏覽器各自記；spec 已補）
-- [ ] 群組頁沒有回首頁的入口，無法離開去建新群組 → header 加回 `/` 的連結（併入 web-polish）
+- [x] 記帳 sheet：捲動區底部被 sticky footer 壓到，最後一行（提示／預覽）看不清 → 捲動區加 padding-bottom ≥ footer 高度；平分提示改「Tap a name to exclude or include them.」
+- [x] 群組頁缺「Copy link / Share」按鈕（建群頁寫 Share the link afterwards 但沒地方複製）；Vite 只聽 localhost，手機同網段連不到 → `server.host: true` + README 寫手機測試步驟（等 settle-direct 完成後開 session）
+- [x] 首頁列出「最近的群組」（localStorage，每瀏覽器各自記；spec 已補）
+- [x] 群組頁沒有回首頁的入口，無法離開去建新群組 → header 加回 `/` 的連結（併入 web-polish）
+- 驗證（第 6 節後四項）：✅ commit 301e807 + 0d27d4c；主管串：Vite 聽 `*:5173`、`http://192.168.0.120:5173/api/health` 經 proxy 回 ok；首頁 Recent groups 有「吃飯飯」可點回；「‹ Groups」連結回首頁；Share 桌面顯示 Link copied（手機模擬走 navigator.share，面板不可見）；375px sheet 捲到底提示完整；direct 模式卡卡只剩 → cindy $400
+
