@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="760" viewBox="0 0 820 760">
+  <title>Group Expense Splitter — dense list wireframe</title>
+  <desc>Group page and expanded full-height add expense form sheet. Grey fills, thin row separators, black 13px sans-serif text.</desc>
+  <defs>
+    <clipPath id="phone"><rect width="375" height="720" rx="24"/></clipPath>
+    <g id="group" font-family="sans-serif" font-size="13" fill="black">
+      <rect width="375" height="720" fill="#fff"/>
+      <text x="18" y="28">9:41</text><text x="305" y="28">▰ ▰ ▰</text>
+      <text x="18" y="62">‹ Groups</text><text x="140" y="62" font-weight="bold">Tokyo trip</text>
+      <circle cx="321" cy="58" r="4" fill="#777"/><text x="331" y="62">live</text>
+      <path d="M0 78H375" stroke="#bbb"/>
+      <g fill="#eee" stroke="#aaa">
+        <rect x="18" y="91" width="55" height="28" rx="14"/><rect x="81" y="91" width="55" height="28" rx="14"/>
+        <rect x="144" y="91" width="55" height="28" rx="14"/><rect x="207" y="91" width="95" height="28" rx="14"/>
+      </g>
+      <text x="36" y="110">Kai</text><text x="98" y="110">Mia</text><text x="161" y="110">Leo</text><text x="220" y="110">+ member</text>
+      <rect y="132" width="375" height="30" fill="#eee"/><text x="18" y="152" letter-spacing="1">BALANCES</text>
+      <text x="18" y="188">Kai</text><text x="357" y="188" text-anchor="end">+$137.50</text>
+      <text x="18" y="227">Mia</text><text x="357" y="227" text-anchor="end">−$45.83</text>
+      <text x="18" y="266">Leo</text><text x="357" y="266" text-anchor="end">−$91.67</text>
+      <path d="M18 201H375M18 240H375M0 279H375" stroke="#ccc"/>
+      <rect y="280" width="375" height="31" fill="#eee"/><text x="18" y="301" letter-spacing="1">SETTLE UP</text><text x="357" y="301" text-anchor="end">2 payments</text>
+      <text x="18" y="337">Leo → Kai</text><text x="357" y="337" text-anchor="end">$91.67</text>
+      <text x="18" y="376">Mia → Kai</text><text x="357" y="376" text-anchor="end">$45.83</text>
+      <path d="M18 350H375M0 389H375" stroke="#ccc"/>
+      <rect y="390" width="375" height="30" fill="#eee"/><text x="18" y="410" letter-spacing="1">EXPENSES</text>
+      <g fill="#e5e5e5" stroke="#aaa"><circle cx="32" cy="449" r="15"/><circle cx="32" cy="505" r="15"/><circle cx="32" cy="561" r="15"/><circle cx="32" cy="617" r="15"/></g>
+      <text x="32" y="454" text-anchor="middle">K</text><text x="32" y="510" text-anchor="middle">K</text><text x="32" y="566" text-anchor="middle">M</text><text x="32" y="622" text-anchor="middle">L</text>
+      <text x="58" y="442">Dinner at Ichiran</text><text x="357" y="442" text-anchor="end">$100.00</text><text x="58" y="462">Kai paid · equally</text>
+      <text x="58" y="498">Shinkansen</text><text x="357" y="498" text-anchor="end">$262.50</text><text x="58" y="518">Kai · exact</text>
+      <text x="58" y="554">Convenience store</text><text x="357" y="554" text-anchor="end">$20.00</text><text x="58" y="574">Mia · equally</text>
+      <text x="58" y="610">Taxi</text><text x="357" y="610" text-anchor="end">$30.00</text><text x="58" y="630">Leo · 50/25/25%</text>
+      <path d="M58 476H375M58 532H375M58 588H375M0 644H375" stroke="#ccc"/>
+      <rect x="0" y="652" width="375" height="68" fill="#eee"/><path d="M0 652H375" stroke="#999"/>
+      <text x="187.5" y="683" text-anchor="middle" font-weight="bold">+ Add expense</text>
+      <rect x="132" y="705" width="111" height="4" rx="2" fill="#888"/>
+    </g>
+  </defs>
+  <rect width="820" height="760" fill="#eee"/>
+  <g transform="translate(20 20)"><g clip-path="url(#phone)"><use href="#group"/></g><rect width="375" height="720" rx="24" fill="none" stroke="black"/></g>
+  <g transform="translate(425 20)" font-family="sans-serif" font-size="13" fill="black">
+    <g clip-path="url(#phone)">
+      <use href="#group"/>
+      <rect width="375" height="720" fill="black" opacity="0.32"/>
+      <path d="M0 56Q0 40 16 40H359Q375 40 375 56V720H0Z" fill="#fff" stroke="#888"/>
+      <rect x="162" y="48" width="51" height="4" rx="2" fill="#bbb"/>
+      <text x="18" y="80" font-weight="bold">Add expense</text><text x="357" y="80" text-anchor="end">×</text>
+      <path d="M0 96H375" stroke="#bbb"/>
+      <rect y="97" width="375" height="31" fill="#eee"/><text x="18" y="118" letter-spacing="1">EXPENSE DETAILS</text>
+      <text x="18" y="155">Description</text><text x="357" y="155" text-anchor="end">Dinner at Ichiran</text>
+      <path d="M18 176H375" stroke="#ccc"/>
+      <text x="18" y="205">Amount</text><text x="250" y="205">$</text><text x="357" y="205" text-anchor="end">100.00</text>
+      <path d="M0 225H375" stroke="#ccc"/>
+      <rect y="226" width="375" height="31" fill="#eee"/><text x="18" y="247" letter-spacing="1">PAYMENT &amp; SPLIT</text>
+      <rect y="257" width="375" height="48" fill="#f5f5f5"/>
+      <text x="18" y="286">Paid by Kai · split equally</text><text x="350" y="286">⌃</text>
+      <path d="M0 305H375" stroke="#bbb"/>
+      <text x="18" y="334">Paid by</text>
+      <g stroke="#999"><rect x="106" y="315" width="76" height="30" rx="15" fill="#ccc"/><rect x="190" y="315" width="76" height="30" rx="15" fill="#fff"/><rect x="274" y="315" width="76" height="30" rx="15" fill="#fff"/></g>
+      <text x="122" y="335">✓ Kai</text><text x="216" y="335">Mia</text><text x="300" y="335">Leo</text>
+      <path d="M18 358H375" stroke="#ccc"/>
+      <text x="18" y="386">Split</text>
+      <g stroke="#999"><rect x="18" y="400" width="339" height="36" rx="5" fill="#fff"/><path d="M23 400H131V436H23Q18 436 18 431V405Q18 400 23 400" fill="#ccc"/><path d="M131 400V436M244 400V436"/></g>
+      <text x="74" y="423" text-anchor="middle">Equally</text><text x="187" y="423" text-anchor="middle">Exact</text><text x="300" y="423" text-anchor="middle">Percent</text>
+      <path d="M0 455H375" stroke="#ccc"/>
+      <rect y="456" width="375" height="31" fill="#eee"/><text x="18" y="477" letter-spacing="1">SPLIT PREVIEW</text>
+      <text x="18" y="515">Kai $33.34 · Mia $33.33 · Leo $33.33</text>
+      <text x="18" y="544">extra ¢ → Kai</text>
+      <path d="M0 564H375" stroke="#ccc"/>
+      <text x="18" y="591">3 members · total $100.00</text>
+      <path d="M0 641H375" stroke="#999"/>
+      <rect x="18" y="655" width="161" height="40" rx="4" fill="#fff" stroke="#999"/>
+      <rect x="195" y="655" width="162" height="40" rx="4" fill="#ccc" stroke="#777"/>
+      <text x="98" y="680" text-anchor="middle">Cancel</text><text x="276" y="680" text-anchor="middle" font-weight="bold">Save</text>
+      <rect x="132" y="705" width="111" height="4" rx="2" fill="#888"/>
+    </g>
+    <rect width="375" height="720" rx="24" fill="none" stroke="black"/>
+  </g>
+</svg>

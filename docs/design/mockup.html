@@ -3,130 +3,388 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Expense Splitter — mockup</title>
+<title>Expense Splitter — mobile mockup</title>
 <style>
+  /* ============================================================
+     DESIGN TOKENS — web/ should copy this :root block verbatim.
+     ============================================================ */
   :root {
-    --bg: #f4f5f7; --card: #fff; --ink: #14171f; --muted: #6b7280; --line: #e5e7eb;
-    --accent: #2563eb; --pos: #15803d; --neg: #b91c1c; --pos-bg: #ecfdf5; --neg-bg: #fef2f2;
-    --radius: 14px;
+    /* surfaces */
+    --bg: #f3f4f6;            /* page background */
+    --card: #ffffff;          /* cards, sheet */
+    --field: #f9fafb;         /* input background */
+    --line: #e5e7eb;          /* hairlines */
+    --dim: rgba(17, 24, 39, .45);
+
+    /* ink */
+    --ink: #111827;
+    --ink-2: #4b5563;         /* secondary text */
+    --muted: #6b7280;         /* captions, labels */
+
+    /* brand + semantics (color is ALWAYS paired with a sign or word) */
+    --accent: #2563eb;
+    --accent-ink: #ffffff;
+    --accent-soft: #eff6ff;
+    --pos: #15803d;  --pos-bg: #ecfdf5;   /* is owed  (+) */
+    --neg: #b91c1c;  --neg-bg: #fef2f2;   /* owes     (−) */
+    --zero: #6b7280; --zero-bg: #f3f4f6;  /* settled  (0) */
+    --warn: #b45309; --warn-bg: #fffbeb;  /* validation hints */
+
+    /* type */
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+    --fs-xs: 11px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px; --fs-xl: 22px; --fs-amt: 34px;
+    --lh: 1.45;
+
+    /* spacing & shape */
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+    --radius: 14px; --radius-sm: 10px; --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(0,0,0,.05);
+    --shadow-fab: 0 6px 18px rgba(37,99,235,.35);
+    --tap: 44px;              /* minimum tap target */
+    --fab-h: 52px;
   }
+
+  /* ---- stage (mockup only; not part of the app) ---- */
   * { box-sizing: border-box; }
-  body { margin: 0; background: #d9dbe0; font: 15px/1.45 -apple-system, "Segoe UI", Roboto, "Noto Sans TC", sans-serif; color: var(--ink); }
-  .stage { display: flex; gap: 32px; padding: 32px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
-  .phone { width: 375px; height: 760px; background: var(--bg); border-radius: 28px; overflow: hidden; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,.25); display: flex; flex-direction: column; }
-  .label { text-align: center; color: #333; font-size: 13px; margin-top: 8px; }
-  .scroll { overflow-y: auto; padding: 16px 16px 96px; flex: 1; }
-  header { padding: 14px 16px 0; }
-  .title { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-  .sub { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 13px; }
-  .chip.add { color: var(--accent); border-style: dashed; }
-  .card { background: var(--card); border-radius: var(--radius); padding: 14px; margin-top: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
-  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
-  .row:first-of-type { border-top: 0; }
-  .amt { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .pos { color: var(--pos); } .neg { color: var(--neg); }
-  .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
-  .pill.pos { background: var(--pos-bg); } .pill.neg { background: var(--neg-bg); }
-  .settle .row { gap: 10px; }
-  .settle .who { flex: 1; }
-  .arrow { color: var(--muted); }
-  .exp .desc { font-weight: 600; }
-  .exp .meta { color: var(--muted); font-size: 12px; }
-  .fab { position: absolute; left: 16px; right: 16px; bottom: 20px; background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 15px; font-size: 16px; font-weight: 600; box-shadow: 0 6px 18px rgba(37,99,235,.35); }
-  .live { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  body { margin: 0; background: #cfd3da; font: var(--fs-md)/var(--lh) var(--font); color: var(--ink); }
+  .stage { display: flex; gap: 28px; padding: 28px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+  .shot { width: 375px; }
+  .caption { font-size: 13px; color: #1f2937; margin: 10px 2px 0; }
+  .caption b { display: block; font-size: 14px; }
+  .caption ul { margin: 4px 0 0; padding-left: 18px; }
+  .phone { width: 375px; height: 780px; background: var(--bg); border-radius: 30px; overflow: hidden; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,.25); display: flex; flex-direction: column; }
+  .statusbar { height: 28px; font-size: 12px; display: flex; justify-content: space-between; padding: 6px 20px 0; color: var(--ink-2); flex: none; }
+
+  /* ---- app chrome ---- */
+  .app-header { padding: var(--sp-2) var(--sp-4) var(--sp-3); background: var(--bg); flex: none; }
+  .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+  h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .sub { color: var(--muted); font-size: var(--fs-sm); margin: 2px 0 var(--sp-3); }
+  .live { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--muted); padding: 3px 8px; border-radius: var(--radius-pill); background: var(--card); border: 1px solid var(--line); white-space: nowrap; margin-top: 3px; }
   .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pos); }
-  /* bottom sheet */
-  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
-  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 20px 20px 0 0; padding: 10px 16px 20px; }
-  .handle { width: 36px; height: 4px; background: var(--line); border-radius: 2px; margin: 0 auto 12px; }
-  .sheet h3 { margin: 0 0 12px; font-size: 17px; }
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  .input { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; background: #fafafa; font-size: 16px; }
-  .input.amount { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .seg div { flex: 1; text-align: center; padding: 9px 0; font-size: 14px; }
+  .live.off::before { background: var(--warn); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { to { opacity: .3; } }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 5px 11px; font-size: var(--fs-sm); min-height: 30px; }
+  .chip .av { width: 18px; height: 18px; border-radius: 50%; font-size: 10px; font-weight: 700; display: inline-grid; place-items: center; color: #fff; }
+  .chip.add { color: var(--accent); border-style: dashed; }
+  .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .av.k { background: #7c3aed; } .av.m { background: #db2777; } .av.l { background: #0891b2; }
+
+  .scroll { overflow-y: auto; padding: 0 var(--sp-4) calc(var(--fab-h) + 40px); flex: 1; }
+  .card { background: var(--card); border-radius: var(--radius); padding: var(--sp-3) var(--sp-4); margin-top: var(--sp-3); box-shadow: var(--shadow); }
+  .card-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--sp-2); }
+  .card-h h2 { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
+  .card-h .meta { font-size: var(--fs-xs); color: var(--muted); }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); min-height: var(--tap); border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .pos { color: var(--pos); } .neg { color: var(--neg); } .zero { color: var(--zero); }
+  .pill { font-size: var(--fs-sm); padding: 3px 10px; border-radius: var(--radius-pill); }
+  .pill.pos { background: var(--pos-bg); } .pill.neg { background: var(--neg-bg); } .pill.zero { background: var(--zero-bg); }
+  .who { display: flex; align-items: center; gap: 8px; }
+  .who .av { width: 26px; height: 26px; border-radius: 50%; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; color: #fff; flex: none; }
+
+  /* settle-up: the hero */
+  .settle { border: 1.5px solid var(--accent); background: var(--accent-soft); }
+  .settle .row { border-top-color: #dbe4f5; }
+  .settle .flow { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .settle .arrow { color: var(--accent); font-weight: 700; }
+  .settle .name { font-weight: 600; }
+  .settle .amt { font-size: var(--fs-lg); }
+  .settle .done { color: var(--pos); font-size: var(--fs-sm); padding: var(--sp-3) 0; }
+
+  /* expenses */
+  .exp .desc { font-weight: 600; }
+  .exp .meta { color: var(--muted); font-size: var(--fs-xs); margin-top: 1px; }
+  .exp .row { cursor: pointer; }
+  .exp .row > div:first-child { min-width: 0; }
+
+  .fab { position: absolute; left: var(--sp-4); right: var(--sp-4); bottom: 20px; height: var(--fab-h); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: var(--radius-pill); font-size: var(--fs-lg); font-weight: 600; box-shadow: var(--shadow-fab); display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+  /* ---- bottom sheet ---- */
+  .dim { position: absolute; inset: 0; background: var(--dim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 20px 20px 0 0; padding: 8px var(--sp-4) var(--sp-5); max-height: 92%; overflow-y: auto; }
+  .handle { width: 36px; height: 4px; background: var(--line); border-radius: 2px; margin: 0 auto 10px; }
+  .sheet-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-3); }
+  .sheet-h h3 { margin: 0; font-size: var(--fs-lg); }
+  .sheet-h .danger { color: var(--neg); font-size: var(--fs-sm); background: none; border: 0; padding: 6px 0; }
+  .field { margin-bottom: var(--sp-3); }
+  .field > label { display: block; font-size: var(--fs-xs); color: var(--muted); margin-bottom: 4px; letter-spacing: .02em; }
+  .input { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 11px 12px; background: var(--field); font-size: 16px; min-height: var(--tap); display: flex; align-items: center; }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: #fff; }
+  .input .ph { color: var(--muted); }
+  .input .caret { display: inline-block; width: 1.5px; height: 1.1em; background: var(--accent); margin-left: 1px; animation: blink 1s steps(2) infinite; }
+  .amount { font-size: var(--fs-amt); font-weight: 700; font-variant-numeric: tabular-nums; gap: 6px; padding: 8px 14px; }
+  .amount .cur { font-size: 20px; color: var(--muted); font-weight: 600; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--field); }
+  .seg div { flex: 1; text-align: center; padding: 10px 0; font-size: var(--fs-sm); min-height: 40px; }
   .seg .on { background: var(--ink); color: #fff; font-weight: 600; }
-  .members { display: flex; gap: 6px; flex-wrap: wrap; }
-  .members .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .actions { display: flex; gap: 10px; margin-top: 16px; }
-  .btn { flex: 1; border: 0; border-radius: 999px; padding: 14px; font-size: 16px; font-weight: 600; }
-  .btn.primary { background: var(--accent); color: #fff; }
+  .split-rows .srow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); min-height: var(--tap); }
+  .split-rows .srow:first-child { border-top: 0; }
+  .split-rows .nm { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .split-rows .mini { width: 92px; padding: 7px 10px; font-size: 15px; min-height: 36px; justify-content: flex-end; text-align: right; }
+  .split-rows .res { width: 72px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+  .preview { margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--field); border-radius: var(--radius-sm); font-size: var(--fs-sm); color: var(--ink-2); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .preview .each { font-variant-numeric: tabular-nums; }
+  .preview .each b { color: var(--ink); }
+  .hint { font-size: var(--fs-xs); color: var(--muted); margin-top: 6px; }
+  .hint.warn { color: var(--warn); }
+  .hint.ok { color: var(--pos); }
+  .actions { display: flex; gap: 10px; margin-top: var(--sp-4); }
+  .btn { flex: 1; border: 0; border-radius: var(--radius-pill); height: var(--fab-h); font-size: var(--fs-lg); font-weight: 600; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.primary[disabled] { opacity: .45; }
   .btn.ghost { background: var(--bg); color: var(--ink); }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--field); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; font-size: var(--fs-sm); min-height: var(--tap); }
+  .toggle-row .chev { color: var(--muted); }
+
+  /* ---- create group (/) ---- */
+  .center { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 var(--sp-6) 80px; }
+  .logo { font-size: 44px; margin-bottom: var(--sp-3); }
+  .center h1 { font-size: 26px; margin-bottom: var(--sp-1); }
+  .center p { color: var(--muted); margin: 0 0 var(--sp-5); }
+  .member-list { display: flex; flex-direction: column; gap: 8px; }
+  .member-list .input { justify-content: space-between; }
+  .member-list .x { color: var(--muted); font-size: 18px; }
+  .addline { color: var(--accent); font-size: var(--fs-sm); font-weight: 600; padding: var(--sp-2) 0; }
+  .kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 216px; background: #d1d5db; border-top: 1px solid #b9bec7; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 6px; }
+  .kbd div { background: #fff; border-radius: 6px; display: grid; place-items: center; font-size: 22px; color: #111; box-shadow: 0 1px 0 #8a8f99; }
+  .kbd .dark { background: #adb3bf; font-size: 14px; }
 </style>
 </head>
 <body>
 <div class="stage">
 
-  <!-- Screen 1: group page -->
-  <div>
-    <div class="phone">
-      <header>
-        <h1 class="title">Tokyo trip 🇯🇵</h1>
-        <div class="sub">3 members · 4 expenses · $412.50 total &nbsp;<span class="live">live</span></div>
-        <div class="chips">
-          <span class="chip">Kai</span><span class="chip">Mia</span><span class="chip">Leo</span>
-          <span class="chip add">+ member</span>
+<!-- ====================== (a) / create group ====================== -->
+<div class="shot">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ▲ ▮</span></div>
+    <div class="center">
+      <div class="logo">🧾</div>
+      <h1>Split a trip</h1>
+      <p>Name the group, add who's coming. Share the link afterwards — no sign-up.</p>
+      <div class="field"><label>Group name</label><div class="input focus">Tokyo trip<span class="caret"></span></div></div>
+      <div class="field"><label>Members</label>
+        <div class="member-list">
+          <div class="input"><span>Kai</span><span class="x">×</span></div>
+          <div class="input"><span>Mia</span><span class="x">×</span></div>
+          <div class="input"><span class="ph">Add a name…</span></div>
         </div>
-      </header>
-      <div class="scroll">
-        <div class="card">
-          <h2>Balances</h2>
-          <div class="row"><span>Kai</span><span class="pill pos amt">gets back $137.50</span></div>
-          <div class="row"><span>Mia</span><span class="pill neg amt">owes $45.83</span></div>
-          <div class="row"><span>Leo</span><span class="pill neg amt">owes $91.67</span></div>
-        </div>
+        <div class="hint">Members can also be added later from the group page.</div>
+      </div>
+      <button class="btn primary" style="flex:none">Create group</button>
+    </div>
+  </div>
+  <div class="caption"><b>(a) <code>/</code> — create group</b>
+    <ul>
+      <li>One screen, one primary action. Members optional here (SPEC: POST /api/groups then redirect; members POSTed after).</li>
+      <li>Enter on the "Add a name…" field appends a row and keeps focus — no mouse travel.</li>
+    </ul>
+  </div>
+</div>
 
-        <div class="card settle">
-          <h2>Settle up · 2 payments</h2>
-          <div class="row"><span class="who">Leo</span><span class="arrow">→</span><span class="who">Kai</span><span class="amt">$91.67</span></div>
-          <div class="row"><span class="who">Mia</span><span class="arrow">→</span><span class="who">Kai</span><span class="amt">$45.83</span></div>
-        </div>
+<!-- ====================== (b) /g/:id group page ====================== -->
+<div class="shot">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ▲ ▮</span></div>
+    <header class="app-header">
+      <div class="title-row">
+        <h1>Tokyo trip</h1>
+        <span class="live">live</span>
+      </div>
+      <div class="sub">3 members · 4 expenses · $412.50 total</div>
+      <div class="chips">
+        <span class="chip"><span class="av k">K</span>Kai</span>
+        <span class="chip"><span class="av m">M</span>Mia</span>
+        <span class="chip"><span class="av l">L</span>Leo</span>
+        <span class="chip add">+ member</span>
+      </div>
+    </header>
+    <div class="scroll">
 
-        <div class="card exp">
-          <h2>Expenses</h2>
-          <div class="row"><div><div class="desc">Dinner at Ichiran</div><div class="meta">Kai paid · split equally · Oct 24</div></div><span class="amt">$100.00</span></div>
-          <div class="row"><div><div class="desc">Shinkansen tickets</div><div class="meta">Kai paid · by exact amounts · Oct 24</div></div><span class="amt">$262.50</span></div>
-          <div class="row"><div><div class="desc">Convenience store</div><div class="meta">Mia paid · split equally · Oct 23</div></div><span class="amt">$20.00</span></div>
-          <div class="row"><div><div class="desc">Taxi from airport</div><div class="meta">Leo paid · 50 / 25 / 25 % · Oct 23</div></div><span class="amt">$30.00</span></div>
+      <div class="card settle">
+        <div class="card-h"><h2>Settle up</h2><span class="meta">2 payments clear everyone</span></div>
+        <div class="row">
+          <div class="flow"><span class="who"><span class="av l">L</span><span class="name">Leo</span></span><span class="arrow">→</span><span class="who"><span class="av k">K</span><span class="name">Kai</span></span></div>
+          <span class="amt">$91.67</span>
+        </div>
+        <div class="row">
+          <div class="flow"><span class="who"><span class="av m">M</span><span class="name">Mia</span></span><span class="arrow">→</span><span class="who"><span class="av k">K</span><span class="name">Kai</span></span></div>
+          <span class="amt">$45.83</span>
         </div>
       </div>
-      <button class="fab">+ Add expense</button>
-    </div>
-    <div class="label">1 · Group page（/g/:id）</div>
-  </div>
 
-  <!-- Screen 2: add expense sheet -->
-  <div>
-    <div class="phone">
-      <header>
-        <h1 class="title">Tokyo trip 🇯🇵</h1>
-        <div class="sub">3 members · 4 expenses · $412.50 total</div>
-      </header>
-      <div class="scroll"><div class="card"><h2>Balances</h2><div class="row"><span>Kai</span><span class="pill pos amt">gets back $137.50</span></div></div></div>
-      <div class="dim"></div>
-      <div class="sheet">
-        <div class="handle"></div>
-        <h3>Add expense</h3>
-        <div class="field"><label>Description</label><div class="input">Dinner at Ichiran</div></div>
-        <div class="field"><label>Amount (USD)</label><div class="input amount">100.00</div></div>
-        <div class="field"><label>Paid by</label>
-          <div class="members"><span class="chip on">Kai</span><span class="chip">Mia</span><span class="chip">Leo</span></div>
-        </div>
-        <div class="field"><label>Split</label>
-          <div class="seg"><div class="on">Equally</div><div>Exact</div><div>Percent</div></div>
-          <div class="members" style="margin-top:8px"><span class="chip on">Kai</span><span class="chip on">Mia</span><span class="chip on">Leo</span></div>
-          <div class="hint">$33.34 · $33.33 · $33.33 — extra cent goes to the first member</div>
-        </div>
-        <div class="actions"><button class="btn ghost">Cancel</button><button class="btn primary">Save</button></div>
+      <div class="card">
+        <div class="card-h"><h2>Balances</h2><span class="meta">paid − share</span></div>
+        <div class="row"><span class="who"><span class="av k">K</span>Kai</span><span class="pill pos amt">+$137.50 gets back</span></div>
+        <div class="row"><span class="who"><span class="av m">M</span>Mia</span><span class="pill neg amt">−$45.83 owes</span></div>
+        <div class="row"><span class="who"><span class="av l">L</span>Leo</span><span class="pill neg amt">−$91.67 owes</span></div>
+      </div>
+
+      <div class="card exp">
+        <div class="card-h"><h2>Expenses</h2><span class="meta">newest first</span></div>
+        <div class="row"><div><div class="desc">Dinner at Ichiran</div><div class="meta">Kai paid · split equally · Oct 24</div></div><span class="amt">$100.00</span></div>
+        <div class="row"><div><div class="desc">Shinkansen tickets</div><div class="meta">Kai paid · exact amounts · Oct 24</div></div><span class="amt">$262.50</span></div>
+        <div class="row"><div><div class="desc">Convenience store</div><div class="meta">Mia paid · split equally · Oct 23</div></div><span class="amt">$20.00</span></div>
+        <div class="row"><div><div class="desc">Taxi from airport</div><div class="meta">Leo paid · 50 / 25 / 25 % · Oct 23</div></div><span class="amt">$30.00</span></div>
       </div>
     </div>
-    <div class="label">2 · Add expense bottom sheet（預設：付款人 = 上次、全員平分）</div>
+    <button class="fab">＋ Add expense</button>
   </div>
+  <div class="caption"><b>(b) <code>/g/:id</code> — group page</b>
+    <ul>
+      <li>Settle-up is the hero: accent border, biggest numbers, "N payments clear everyone". Empty state: "All settled 🎉".</li>
+      <li>Balance pills pair colour with sign <em>and</em> word (+ gets back / − owes / 0 settled) — readable without colour.</li>
+      <li>Header pill = SSE state: green "live"; amber blinking "reconnecting…" when <code>EventSource</code> errors.</li>
+      <li>Tapping an expense row opens the sheet in edit mode (d). FAB stays above the scroll.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ====================== (c) add expense sheet — EQUAL ====================== -->
+<div class="shot">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ▲ ▮</span></div>
+    <header class="app-header"><div class="title-row"><h1>Tokyo trip</h1><span class="live">live</span></div></header>
+    <div class="scroll"><div class="card settle"><div class="card-h"><h2>Settle up</h2></div></div></div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-h"><h3>Add expense</h3></div>
+      <div class="field"><label>Description</label><div class="input">Dinner at Ichiran</div></div>
+      <div class="field"><label>Amount (USD)</label>
+        <div class="input amount focus"><span class="cur">$</span>100.00<span class="caret"></span></div>
+        <div class="hint">type="text" inputmode="decimal" · 2 decimals max · sent as the string "100.00"</div>
+      </div>
+      <div class="field"><label>Paid by</label>
+        <div class="chips"><span class="chip on"><span class="av k">K</span>Kai</span><span class="chip"><span class="av m">M</span>Mia</span><span class="chip"><span class="av l">L</span>Leo</span></div>
+      </div>
+      <div class="field"><label>Split</label>
+        <div class="seg"><div class="on">Equally</div><div>Exact</div><div>Percent</div></div>
+        <div class="chips" style="margin-top:8px"><span class="chip on"><span class="av k">K</span>Kai</span><span class="chip on"><span class="av m">M</span>Mia</span><span class="chip on"><span class="av l">L</span>Leo</span></div>
+        <div class="preview">
+          <span class="each">Kai <b>$33.34</b></span><span class="each">Mia <b>$33.33</b></span><span class="each">Leo <b>$33.33</b></span>
+        </div>
+        <div class="hint">Extra 1¢ goes to Kai (first member). Tap a name to exclude them.</div>
+      </div>
+      <div class="actions"><button class="btn ghost">Cancel</button><button class="btn primary">Save</button></div>
+    </div>
+  </div>
+  <div class="caption"><b>(c) Add expense — Equally (default)</b>
+    <ul>
+      <li>Fast path = type description, type amount, tap Save. Payer defaults to last used; split defaults to everyone.</li>
+      <li>Per-person preview is computed client-side with the same floor + first-r-members rule, so what you see is what the server stores.</li>
+      <li>Amount field autofocuses when description is filled via Enter (<code>enterkeyhint="next"</code>).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ====================== (c2) sheet — EXACT ====================== -->
+<div class="shot">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ▲ ▮</span></div>
+    <header class="app-header"><div class="title-row"><h1>Tokyo trip</h1><span class="live">live</span></div></header>
+    <div class="scroll"><div class="card settle"><div class="card-h"><h2>Settle up</h2></div></div></div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-h"><h3>Add expense</h3></div>
+      <div class="field"><label>Description</label><div class="input">Shinkansen tickets</div></div>
+      <div class="field"><label>Amount (USD)</label><div class="input amount"><span class="cur">$</span>262.50</div></div>
+      <div class="field"><label>Paid by</label>
+        <div class="chips"><span class="chip on"><span class="av k">K</span>Kai</span><span class="chip"><span class="av m">M</span>Mia</span><span class="chip"><span class="av l">L</span>Leo</span></div>
+      </div>
+      <div class="field"><label>Split</label>
+        <div class="seg"><div>Equally</div><div class="on">Exact</div><div>Percent</div></div>
+        <div class="split-rows" style="margin-top:8px">
+          <div class="srow"><span class="nm"><span class="av k" style="width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:#fff">K</span>Kai</span><div class="input mini">131.25</div></div>
+          <div class="srow"><span class="nm"><span class="av m" style="width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:#fff">M</span>Mia</span><div class="input mini focus">131.25<span class="caret"></span></div></div>
+          <div class="srow"><span class="nm"><span class="av l" style="width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:#fff">L</span>Leo</span><div class="input mini"><span class="ph">0.00</span></div></div>
+        </div>
+        <div class="hint ok">✓ Sums to $262.50</div>
+      </div>
+      <div class="actions"><button class="btn ghost">Cancel</button><button class="btn primary">Save</button></div>
+    </div>
+  </div>
+  <div class="caption"><b>(c′) Split — Exact amounts</b>
+    <ul>
+      <li>One decimal input per member, right-aligned, same <code>inputmode="decimal"</code>. Empty = 0.</li>
+      <li>Running total line flips: green "✓ Sums to $262.50" / amber "$12.50 left to assign" / amber "$3.00 over". Save disabled until ✓.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ====================== (c3) sheet — PERCENT ====================== -->
+<div class="shot">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ▲ ▮</span></div>
+    <header class="app-header"><div class="title-row"><h1>Tokyo trip</h1><span class="live">live</span></div></header>
+    <div class="scroll"><div class="card settle"><div class="card-h"><h2>Settle up</h2></div></div></div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-h"><h3>Add expense</h3></div>
+      <div class="field"><label>Description</label><div class="input">Taxi from airport</div></div>
+      <div class="field"><label>Amount (USD)</label><div class="input amount"><span class="cur">$</span>30.00</div></div>
+      <div class="field"><label>Paid by</label>
+        <div class="chips"><span class="chip"><span class="av k">K</span>Kai</span><span class="chip"><span class="av m">M</span>Mia</span><span class="chip on"><span class="av l">L</span>Leo</span></div>
+      </div>
+      <div class="field"><label>Split</label>
+        <div class="seg"><div>Equally</div><div>Exact</div><div class="on">Percent</div></div>
+        <div class="split-rows" style="margin-top:8px">
+          <div class="srow"><span class="nm">Kai</span><div class="input mini">50 <span class="ph">%</span></div><span class="res">$15.00</span></div>
+          <div class="srow"><span class="nm">Mia</span><div class="input mini">25 <span class="ph">%</span></div><span class="res">$7.50</span></div>
+          <div class="srow"><span class="nm">Leo</span><div class="input mini">25 <span class="ph">%</span></div><span class="res">$7.50</span></div>
+        </div>
+        <div class="hint ok">✓ 100% · shares sum to $30.00</div>
+      </div>
+      <div class="actions"><button class="btn ghost">Cancel</button><button class="btn primary">Save</button></div>
+    </div>
+  </div>
+  <div class="caption"><b>(c″) Split — Percent</b>
+    <ul>
+      <li>Right column shows the resulting share per person, recomputed on every keystroke (floor + largest remainder, same as <code>money.ts</code>).</li>
+      <li>Hint: "✓ 100%" / "7% left" / "0.5% over". Within ±0.01 the server accepts; the preview then shows where the residual cents land, e.g. 33.33×3 on $1000 → "+7¢ spread by largest remainder".</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ====================== (d) edit / delete ====================== -->
+<div class="shot">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● ▲ ▮</span></div>
+    <header class="app-header"><div class="title-row"><h1>Tokyo trip</h1><span class="live off">reconnecting…</span></div></header>
+    <div class="scroll"><div class="card settle"><div class="card-h"><h2>Settle up</h2></div></div></div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-h"><h3>Edit expense</h3><button class="danger">Delete</button></div>
+      <div class="field"><label>Description</label><div class="input">Taxi from airport</div></div>
+      <div class="field"><label>Amount (USD)</label><div class="input amount"><span class="cur">$</span>30.00</div></div>
+      <div class="field"><label>Paid by</label>
+        <div class="chips"><span class="chip"><span class="av k">K</span>Kai</span><span class="chip"><span class="av m">M</span>Mia</span><span class="chip on"><span class="av l">L</span>Leo</span></div>
+      </div>
+      <div class="field"><label>Split</label>
+        <div class="seg"><div>Equally</div><div>Exact</div><div class="on">Percent</div></div>
+        <div class="split-rows" style="margin-top:8px">
+          <div class="srow"><span class="nm">Kai</span><div class="input mini">50 <span class="ph">%</span></div><span class="res">$15.00</span></div>
+          <div class="srow"><span class="nm">Mia</span><div class="input mini">25 <span class="ph">%</span></div><span class="res">$7.50</span></div>
+          <div class="srow"><span class="nm">Leo</span><div class="input mini">25 <span class="ph">%</span></div><span class="res">$7.50</span></div>
+        </div>
+        <div class="hint">Loaded from <code>inputValue</code> — the 50/25/25 you typed, not the derived cents.</div>
+      </div>
+      <div class="toggle-row"><span>Delete this expense?</span><span><button class="danger" style="color:var(--neg);background:none;border:0;font-weight:600">Delete</button> · <span class="chev">Keep</span></span></div>
+      <div class="actions"><button class="btn ghost">Cancel</button><button class="btn primary">Save changes</button></div>
+    </div>
+  </div>
+  <div class="caption"><b>(d) Edit / delete + offline state</b>
+    <ul>
+      <li>Same sheet, title "Edit expense", a Delete text button in the header. Delete needs a second tap (inline confirm row), never a browser <code>confirm()</code>.</li>
+      <li>Header pill shows the SSE error state: amber blinking "reconnecting…". Writes still work; the page refetches once the stream reopens.</li>
+    </ul>
+  </div>
+</div>
 
 </div>
 </body>
