@@ -50,8 +50,11 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 
 - `splitEqual(total, memberIds)`：每人 `floor(total / n)`；餘數 `r` 分，依成員順序給前 `r` 位各 1 分。
   $100 / 3 → 3334 / 3333 / 3333。
-- `splitPercent(total, [{id, pct}])`：每人先取 `total * pct / 100` 無條件捨去，剩下的分以
-  **最大餘數法**分配，同餘數依成員順序。百分比加總必須等於 100（容許 ±0.01），否則 400。
+- `splitPercent(total, [{id, pct}])`：每人先取 `total * pct / 100` 無條件捨去（用整數 basis
+  points 算，不經浮點），殘差 `total − Σfloor` 以**最大餘數法**分配，同餘數依成員順序。
+  百分比加總必須等於 100 ± 0.01，否則 400。因為有容許值，殘差可能超過每人一分（例如 $1000
+  按 33.33 × 3 會剩 7 分）或為負（加總 100.01）：依最大餘數順序循環每次加一分（為負時依最小
+  餘數順序每次減一分），直到 share 加總恰等於 `total`。不變量：Σ share = total，永遠成立。
 - `splitExact(total, [{id, cents}])`：加總必須恰等於 `total`，否則 400。
 - `balances(expenses)`：每人 付出 − 應分攤。全體加總恆為 0。
 - `settle(balances)`：債權人降冪、債務人降冪排序；雙指標貪婪，每步付 `min(credit, debt)`。

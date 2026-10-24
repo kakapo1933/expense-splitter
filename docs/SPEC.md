@@ -52,9 +52,13 @@ Decisions:
 
 - `splitEqual(total, memberIds)`: `floor(total / n)` each; remainder `r` cents go one each to the
   first `r` members in member order. $100 / 3 → 3334 / 3333 / 3333.
-- `splitPercent(total, [{id, pct}])`: `round-down(total * pct / 100)` each, then distribute the
-  remaining cents by **largest remainder**, ties broken by member order. Percent sum must equal
-  100 (tolerance 0.01), else 400.
+- `splitPercent(total, [{id, pct}])`: `round-down(total * pct / 100)` each (integer basis points,
+  no float), then distribute the residual `total − Σfloor` by **largest remainder**, ties broken by
+  member order. Percent sum must equal 100 ± 0.01, else 400. Because of the tolerance the residual
+  can exceed one cent per member (e.g. $1000 at 33.33 × 3 leaves 7 cents) or be negative (sum
+  100.01): cycle through the largest-remainder order adding (or, when negative, subtracting from
+  the smallest-remainder order) one cent at a time until the shares sum to `total` exactly.
+  Invariant: Σ share = total, always.
 - `splitExact(total, [{id, cents}])`: sum must equal `total` exactly, else 400.
 - `balances(expenses)`: per member, paid − owed. Sum over all members is always 0.
 - `settle(balances)`: sort creditors desc, debtors desc; two-pointer greedy, each step pays
