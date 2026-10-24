@@ -100,9 +100,9 @@ Errors are `400 { error, message | issues }` (`VALIDATION`, `PERCENT_SUM_MISMATC
 ## Frontend
 
 Mobile-first, one page per group. The fastest path to log an expense is description → amount →
-Save: payer defaults to the last one used, split defaults to everyone equally, and the sheet shows
-"Kai paid · split equally among 3" as a one-line summary that expands only if you need to change
-it. Balances use colour *and* sign (`+$12.34 gets back` / `−$12.34 owes` / `settled`), and the
+Save: payer defaults to the last one used and split defaults to everyone equally, with both
+controls visible so the default is also a confirmation (an earlier collapsed "Kai paid · split
+equally" summary row tested as too easy to miss). Balances use colour *and* sign (`+$12.34 gets back` / `−$12.34 owes` / `settled`), and the
 settle-up card sits above balances because "who pays whom" is the question people open the app for.
 The sheet previews each person's share and says where the odd cent goes.
 
