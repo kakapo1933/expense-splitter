@@ -134,7 +134,12 @@ id 一律 UUID v4（`crypto.randomUUID()`），群組 URL 不可猜。
 記一筆的最短路徑：描述 + 金額 + 送出（付款人預設上次的人，分法預設全員平分）。
 金額欄用 `inputmode="decimal"`。
 
-路由：`/` 建群組（完成後導向）；`/g/:id` 群組頁。群組 URL 就是邀請連結。
+路由：`/` 建群組（完成後導向）；`/g/:id` 群組頁。群組 URL 就是邀請連結；群組頁有
+**Copy link** 按鈕（手機用 `navigator.share`，否則寫剪貼簿）。
+
+**最近的群組**（沒有帳號，所以是每個瀏覽器各自記）：每次成功載入 `/g/:id` 就把
+`{id, name, lastVisited}` 存進 localStorage；`/` 在建群表單上方列出，最近的在前，群組 404 時移除。
+明講的限制：換裝置就看不到。
 
 同步：收到 SSE `changed` 就重抓 `GET /api/groups/:id`。`EventSource` 自動重連；重連後重抓一次。
 

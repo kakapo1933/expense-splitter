@@ -140,7 +140,12 @@ One page, mobile-first:
 Fastest path to log an expense: description + amount + submit (payer defaults to last used,
 split defaults to equal across all members). `inputmode="decimal"` on amount.
 
-Routes: `/` create a group (then redirect); `/g/:id` group page. The group URL is the invite link.
+Routes: `/` create a group (then redirect); `/g/:id` group page. The group URL is the invite link;
+the group page has a **Copy link** button (`navigator.share` on phones, clipboard otherwise).
+
+**Recent groups** (no accounts, so per browser): every successful load of `/g/:id` stores
+`{id, name, lastVisited}` in localStorage; `/` lists them above the create form, most recent first,
+and drops an entry when the group 404s. Stated limitation: it does not follow the user across devices.
 
 Sync: on SSE `changed`, refetch `GET /api/groups/:id`. `EventSource` reconnects on its own;
 refetch once after reconnect.
