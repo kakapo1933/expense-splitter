@@ -18,14 +18,15 @@
 - 備註：`serveStatic` root 用 cwd 相對路徑換算，從非專案目錄啟動 production 可能失效 → 第 3 段修
 
 ## 2. 金額邏輯（`server/src/money.ts`）
-- [ ] `parseAmount("12.34") → 1234`，拒絕非法字串
-- [ ] `splitEqual`：餘數依成員順序給前面的人
-- [ ] `splitPercent`：最大餘數法；加總 ≠ 100 丟錯
-- [ ] `splitExact`：加總 ≠ total 丟錯
-- [ ] `balances`：paid − owed，全體加總為 0
-- [ ] `settle`：雙指標貪婪，≤ n−1 筆
-- [ ] `node:test`：$100÷3、$0.01÷3、$10 按 33.33/33.33/33.34%、exact 不合、編輯後餘額、settle 清空
-- 驗證：`pnpm test` 全綠
+- [x] `parseAmount("12.34") → 1234`，拒絕非法字串
+- [x] `splitEqual`：餘數依成員順序給前面的人
+- [x] `splitPercent`：最大餘數法；加總 ≠ 100±0.01 丟錯；殘差全數分完（spec a0a3c25 補定義）
+- [x] `splitExact`：加總 ≠ total 丟錯
+- [x] `balances`：paid − owed，全體加總為 0
+- [x] `settle`：雙指標貪婪，≤ n−1 筆
+- [x] `node:test` 25 個：$100÷3、$0.01÷3、百分比殘差（$1000 按 33.33×3、50/50.01、0/0.01/99.99）、exact 不合、編輯後餘額、settle 清空
+- 驗證：✅ commit b114c3a + 修正 7421171；主管串重跑 `pnpm test` 25/25，另外探測四個殘差案例加總皆 = total
+- 備註：第一版在 ±0.01 容許值下殘差只補一輪，$1000 會少 7 分；主管串用大金額探出，spec 補規則後修正
 
 ## 3. 資料與 API
 - [ ] `db.ts`：開檔、建四張表、`PRAGMA foreign_keys=ON`、WAL
