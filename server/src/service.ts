@@ -65,9 +65,10 @@ export function createService(db: DatabaseSync) {
     ),
     insertMember: db.prepare("INSERT INTO members (id, group_id, name, created_at) VALUES (?, ?, ?, ?)"),
     getMember: db.prepare("SELECT id, name, created_at AS createdAt FROM members WHERE id = ?"),
-    // Member order = join order: created_at, then id (SPEC "Money logic").
+    // Member order = insertion order = SQLite rowid (SPEC "Money logic"). Never a timestamp:
+    // two inserts in the same millisecond would tie and fall back to random UUID order.
     listMembers: db.prepare(
-      "SELECT id, name, created_at AS createdAt FROM members WHERE group_id = ? ORDER BY created_at, id",
+      "SELECT id, name, created_at AS createdAt FROM members WHERE group_id = ? ORDER BY rowid",
     ),
     insertExpense: db.prepare(
       `INSERT INTO expenses (id, group_id, payer_id, description, amount_cents, split_mode, created_at, updated_at)
@@ -87,11 +88,11 @@ export function createService(db: DatabaseSync) {
               created_at AS createdAt, updated_at AS updatedAt
        FROM expenses WHERE id = ? AND group_id = ?`,
     ),
-    // Newest first; id as tiebreaker so two writes in the same millisecond stay stable.
+    // Newest first by insertion order (rowid), for the same reason as members.
     listExpenses: db.prepare(
       `SELECT id, description, amount_cents AS amountCents, payer_id AS payerId, split_mode AS splitMode,
               created_at AS createdAt, updated_at AS updatedAt
-       FROM expenses WHERE group_id = ? ORDER BY created_at DESC, id DESC`,
+       FROM expenses WHERE group_id = ? ORDER BY rowid DESC`,
     ),
     listSplitsForGroup: db.prepare(
       `SELECT s.expense_id AS expenseId, s.member_id AS memberId, s.share_cents AS shareCents, s.input_value AS inputValue

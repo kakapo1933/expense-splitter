@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS members (
   created_at TEXT NOT NULL,
   UNIQUE (group_id, name)
 );
-CREATE INDEX IF NOT EXISTS members_group_idx ON members(group_id, created_at, id);
+CREATE INDEX IF NOT EXISTS members_group_idx ON members(group_id);
 
 CREATE TABLE IF NOT EXISTS expenses (
   id           TEXT PRIMARY KEY,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS expenses_group_idx ON expenses(group_id, created_at);
+CREATE INDEX IF NOT EXISTS expenses_group_idx ON expenses(group_id);
 
 CREATE TABLE IF NOT EXISTS expense_splits (
   expense_id  TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,

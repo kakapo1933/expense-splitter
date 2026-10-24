@@ -16,9 +16,9 @@ describe("service: full lifecycle on an in-memory DB", () => {
     const c = svc.addMember(g.id, "Cy");
     const ids = [a.id, b.id, c.id];
 
-    // member order is created_at, id — three inserts in the same ms may reorder, so compare as sets
+    // member order = insertion order (rowid), deterministic even within one millisecond
     let view = svc.getGroupView(g.id);
-    assert.deepEqual(new Set(view.members.map((m) => m.id)), new Set(ids));
+    assert.deepEqual(view.members.map((m) => m.id), ids);
     assert.deepEqual(view.expenses, []);
     assert.ok(view.balances.every((x) => x.netCents === 0));
 
@@ -26,29 +26,23 @@ describe("service: full lifecycle on an in-memory DB", () => {
       description: "Dinner",
       amount: "100.00",
       payerId: a.id,
-      split: { mode: "equal", memberIds: ids },
+      split: { mode: "equal", memberIds: [c.id, b.id, a.id] },
     });
     assert.equal(e.amountCents, 10000);
     assert.equal(e.splitMode, "equal");
     assert.equal(e.splits.length, 3);
     assert.ok(e.splits.every((s) => s.inputValue === null));
     assert.equal(e.splits.reduce((n, s) => n + s.shareCents, 0), 10000);
-    // the extra cent lands on the first member in member order
-    const first = svc.getGroupView(g.id).members[0]!.id;
-    assert.equal(e.splits.find((s) => s.memberId === first)!.shareCents, 3334);
+    // the extra cent lands on Ann, who joined first (regardless of request order)
+    const share = (id: string) => e.splits.find((s) => s.memberId === id)!.shareCents;
+    assert.deepEqual([share(a.id), share(b.id), share(c.id)], [3334, 3333, 3333]);
 
     view = svc.getGroupView(g.id);
     const net = (id: string) => view.balances.find((x) => x.memberId === id)!.netCents;
     assert.equal(view.balances.reduce((n, x) => n + x.netCents, 0), 0);
-    if (first === a.id) {
-      assert.equal(net(a.id), 6666);
-      assert.equal(net(b.id), -3333);
-      assert.equal(net(c.id), -3333);
-    } else {
-      // Ann paid 10000 and owes 3333; whoever is first owes 3334
-      assert.equal(net(a.id), 6667);
-      assert.deepEqual([net(b.id), net(c.id)].sort(), [-3334, -3333]);
-    }
+    assert.equal(net(a.id), 6666); // paid 10000, owes 3334
+    assert.equal(net(b.id), -3333);
+    assert.equal(net(c.id), -3333);
     assert.equal(view.settlement.length, 2);
     assert.ok(view.settlement.every((t) => t.toId === a.id));
 
@@ -107,10 +101,8 @@ describe("service: full lifecycle on an in-memory DB", () => {
     mk("one");
     const second = mk("two");
     const view = svc.getGroupView(g.id);
-    // same-ms tie breaks by id desc; just assert both present and the list is sorted by createdAt desc
-    assert.equal(view.expenses.length, 2);
-    assert.ok(view.expenses[0]!.createdAt >= view.expenses[1]!.createdAt);
-    assert.ok(view.expenses.some((e) => e.id === second.id));
+    assert.deepEqual(view.expenses.map((e) => e.description), ["two", "one"]);
+    assert.equal(view.expenses[0]!.id, second.id);
   });
 });
 
