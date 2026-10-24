@@ -34,7 +34,7 @@ All money columns are **integer cents**.
 | Table            | Columns                                                                                                     |
 |------------------|-------------------------------------------------------------------------------------------------------------|
 | `groups`         | id, name, currency (fixed `USD` for now), created_at                                                        |
-| `members`        | id, group_id, name — unique (group_id, name)                                                                |
+| `members`        | id, group_id, name, created_at — unique (group_id, name); ordered by `rowid` (insertion order)                |
 | `expenses`       | id, group_id, payer_id, description, amount_cents, split_mode (`equal`/`exact`/`percent`), created_at, updated_at |
 | `expense_splits` | expense_id, member_id, share_cents, input_value — PK (expense_id, member_id)                                |
 
@@ -65,8 +65,8 @@ Decisions:
   `min(credit, debt)`. At most n−1 transfers. Not guaranteed globally minimal (that is NP-hard);
   stated as a tradeoff.
 
-Remainder cents always go to the first members in **member order** (= join order: `created_at`,
-then id). Chosen over "give to payer" because it is simpler and predictable.
+Remainder cents always go to the first members in **member order** (= insertion order, i.e.
+SQLite `rowid` of `members`; never a timestamp, which can tie within a millisecond). Chosen over "give to payer" because it is simpler and predictable.
 
 ## API
 

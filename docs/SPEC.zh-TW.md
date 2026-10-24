@@ -33,7 +33,7 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 | 表               | 欄位                                                                                                        |
 |------------------|-------------------------------------------------------------------------------------------------------------|
 | `groups`         | id, name, currency（先固定 `USD`）, created_at                                                              |
-| `members`        | id, group_id, name — (group_id, name) 唯一                                                                  |
+| `members`        | id, group_id, name, created_at — (group_id, name) 唯一；依 `rowid`（插入順序）排序                           |
 | `expenses`       | id, group_id, payer_id, description, amount_cents, split_mode（`equal`/`exact`/`percent`）, created_at, updated_at |
 | `expense_splits` | expense_id, member_id, share_cents, input_value — PK (expense_id, member_id)                                |
 
@@ -60,7 +60,7 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 - `settle(balances)`：債權人降冪、債務人降冪排序；雙指標貪婪，每步付 `min(credit, debt)`。
   最多 n−1 筆。不保證全域最少（那是 NP-hard）；作為取捨明講。
 
-餘數一律依**成員順序**（= 加入順序：`created_at`，再以 id 決勝）給前面的成員。
+餘數一律依**成員順序**（= 插入順序，即 `members` 的 SQLite `rowid`；不用時間戳，同一毫秒會撞）給前面的成員。
 不選「給付款人」，因為前者規則更簡單、可預測。
 
 ## API
