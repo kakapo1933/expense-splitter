@@ -2,8 +2,8 @@
 
 依 `SPEC.md` 分段實作；每段完成就在這裡打勾並註記驗證方式。即時更新。
 
-分工：本對話串（主管）負責需求、文件、驗收與更新本檔；每一段開發各開一個新的對話串執行，
-開發串只動自己那段的程式碼、不改 `docs/`，完成後自行 commit。
+分工：需求、文件與驗收由一條「審查」對話串負責並維護本檔；每一段開發各開一條獨立的「實作」對話串，
+實作串只動自己那段的程式碼、不改 `docs/`，完成後自行 commit。下文「審查」指審查串獨立重做的驗證。
 
 ## 0. 設計
 - [x] 技術棧定案：Hono + `node:sqlite` + Vite React（commit 8d04f8a）
@@ -14,7 +14,7 @@
 - [x] `server/`：Hono + `@hono/node-server`、tsconfig、`src/index.ts` 含 `GET /api/health`（dev 用 tsx watch）
 - [x] `web/`：Vite + React + TS，`vite.config.ts` proxy `/api` → :3000
 - [x] 根指令：`pnpm dev`、`pnpm test`、`pnpm build`、`pnpm start`
-- 驗證：✅ commit 7751bfb；主管串重測 `curl :3999/api/health` 回 `{"ok":true}`、`pnpm build` 過
+- 驗證：✅ commit 7751bfb；審查重測 `curl :3999/api/health` 回 `{"ok":true}`、`pnpm build` 過
 - 備註：`serveStatic` root 用 cwd 相對路徑換算，從非專案目錄啟動 production 可能失效 → 第 3 段修
 
 ## 2. 金額邏輯（`server/src/money.ts`）
@@ -25,8 +25,8 @@
 - [x] `balances`：paid − owed，全體加總為 0
 - [x] `settle`：雙指標貪婪，≤ n−1 筆
 - [x] `node:test` 25 個：$100÷3、$0.01÷3、百分比殘差（$1000 按 33.33×3、50/50.01、0/0.01/99.99）、exact 不合、編輯後餘額、settle 清空
-- 驗證：✅ commit b114c3a + 修正 7421171；主管串重跑 `pnpm test` 25/25，另外探測四個殘差案例加總皆 = total
-- 備註：第一版在 ±0.01 容許值下殘差只補一輪，$1000 會少 7 分；主管串用大金額探出，spec 補規則後修正
+- 驗證：✅ commit b114c3a + 修正 7421171；審查重跑 `pnpm test` 25/25，另外探測四個殘差案例加總皆 = total
+- 備註：第一版在 ±0.01 容許值下殘差只補一輪，$1000 會少 7 分；審查用大金額探出，spec 補規則後修正
 
 ## 3. 資料與 API
 - [x] `db.ts`：`node:sqlite` 開檔、建四張表、`PRAGMA foreign_keys=ON`、WAL；路徑以 `import.meta.url` 為基準
@@ -35,11 +35,11 @@
 - [x] `events.ts`：SSE，每群組一組訂閱者，寫入後廣播 `changed`
 - [x] 錯誤處理：zod → 400 `VALIDATION`；money → 400 帶 code（`PERCENT_SUM_MISMATCH` 等）；未知成員 400 `UNKNOWN_MEMBER`；同名成員 409；找不到 404
 - [x] 順便修 `serveStatic` root 改絕對路徑
-- 驗證：✅ commit 5892ba2 + 修正 83595e3；主管串 `pnpm test` 31/31；bash 腳本 curl：建群、三人、三種分法、PUT、DELETE、四種壞輸入各 400 且 code 正確、404、重啟後資料仍在、SSE 收到 `changed`；餘額手算核對一致
-- 備註：第一版 members `ORDER BY created_at, id`，同毫秒建立時順序隨 UUID 浮動、餘數歸屬不確定；主管串跑測試抓到，spec 改成 rowid 後修正
+- 驗證：✅ commit 5892ba2 + 修正 83595e3；審查 `pnpm test` 31/31；bash 腳本 curl：建群、三人、三種分法、PUT、DELETE、四種壞輸入各 400 且 code 正確、404、重啟後資料仍在、SSE 收到 `changed`；餘額手算核對一致
+- 備註：第一版 members `ORDER BY created_at, id`，同毫秒建立時順序隨 UUID 浮動、餘數歸屬不確定；審查跑測試抓到，spec 改成 rowid 後修正
 
 ## 4. 前端
-- [x] 設計稿：design session 做研究 + codex 概念圖 + 六畫面 mockup（commit d989387），使用者確認採卡片式
+- [x] 設計稿：設計串做研究 + codex 概念圖 + 六畫面 mockup（commit d989387），使用者確認採卡片式
 - [x] `/` 建群組（可同時加成員）→ 導向 `/g/:id`
 - [x] `/g/:id`：header（群名、成員 chips、+ member、live 小點）
 - [x] settle-up 卡（accent 邊框，提到餘額之上）+ 餘額卡（綠 +／紅 −／灰 settled）
@@ -47,28 +47,28 @@
 - [x] 底部「+ Add expense」bottom sheet：描述、金額、「Kai paid · split equally among 3」摘要列展開付款人與三模式、即時預覽與餘數提示、壞輸入訊息
 - [x] SSE 訂閱 → 重抓
 - [x] 375px 排版無橫向捲動
-- 驗證：✅ commit 35582c0；主管串 Browser pane 實測：建群 + 三人 → $100 平分（預覽 33.34/33.33/33.33）→ $30 percent 50/25/25（加總 90 時 Save 鎖住並提示）→ 餘額手算一致 → 第二分頁不重整收到刪除後更新（SSE）→ 編輯回填 50/25/25 → 375px `scrollWidth == innerWidth`。截圖：`docs/evidence/`（web session 9 張 + 主管串 2 張）
-- 備註：exact 模式主管串未親測（web session 有截圖 `sheet-exact-desktop.jpg`，API 層已 curl 驗過）
+- 驗證：✅ commit 35582c0；審查以 Browser pane 實測：建群 + 三人 → $100 平分（預覽 33.34/33.33/33.33）→ $30 percent 50/25/25（加總 90 時 Save 鎖住並提示）→ 餘額手算一致 → 第二分頁不重整收到刪除後更新（SSE）→ 編輯回填 50/25/25 → 375px `scrollWidth == innerWidth`。截圖：`docs/evidence/`（實作串 9 張 + 審查 2 張）
+- 備註：exact 模式審查未親測（實作串有截圖 `sheet-exact-desktop.jpg`，API 層已 curl 驗過）
 
 ## 5. 交付
 - [x] README：安裝與執行、設計決策（從 SPEC 濃縮）、取捨、next steps（commit b2b9b73，逐項對過程式碼）
 - [x] `.gitignore` 排除 db 與 dist；全新 clone 後 `git ls-files` 無 .db
-- [x] 推到 GitHub：https://github.com/kakapo1933/expense-splitter（public）；主管串從全新 clone 跑 `pnpm install && pnpm test && pnpm build` 31/31 綠、build 過
+- [x] 推到 GitHub：https://github.com/kakapo1933/expense-splitter（public）；審查從全新 clone 跑 `pnpm install && pnpm test && pnpm build` 31/31 綠、build 過
 - [ ] 回信附連結
 
 ## 6. 使用者實測後的修正
 - [x] 中文輸入法選字的 Enter 被當成加成員 → 三處 onKeyDown 加 `isComposingEnter` 守衛（commit 007cc81）
 - [x] 記帳 sheet「X paid · split equally」摺疊列像提示文字、易忽略 → 付款人／分法預設展開、Cancel/Save sticky（commit 6997089；research.md 與 README 同步改）
 - [x] 回報「後面新增的人被算進前面平分的帳」→ 查 `server/data/app.db`：阿咪在所有支出前加入、卡卡只出現在加入後的「電影」，沒有任何支出含記帳當時不存在的成員。實際是「加人後新支出預設全員平分」的 UX 預期落差，非計算錯誤；維持預設全員，README next steps 考慮加「記住上次參與者」
-- [x] 加 Settle 切換 Fewest payments / Pay who paid for you（commit ac91c10；35 測試全綠；主管串在「吃飯飯」確認兩種方案都讓餘額歸零，direct 14 筆 vs fewest 5 筆；spec 原寫「總額相同」有誤已改）
+- [x] 加 Settle 切換 Fewest payments / Pay who paid for you（commit ac91c10；35 測試全綠；審查在「吃飯飯」確認兩種方案都讓餘額歸零，direct 14 筆 vs fewest 5 筆；spec 原寫「總額相同」有誤已改）
 - [x] 記帳 sheet：捲動區底部被 sticky footer 壓到，最後一行（提示／預覽）看不清 → 捲動區加 padding-bottom ≥ footer 高度；平分提示改「Tap a name to exclude or include them.」
 - [x] 群組頁缺「Copy link / Share」按鈕（建群頁寫 Share the link afterwards 但沒地方複製）；Vite 只聽 localhost，手機同網段連不到 → `server.host: true` + README 寫手機測試步驟（等 settle-direct 完成後開 session）
 - [x] 首頁列出「最近的群組」（localStorage，每瀏覽器各自記；spec 已補）
 - [x] 群組頁沒有回首頁的入口，無法離開去建新群組 → header 加回 `/` 的連結（併入 web-polish）
-- 驗證（第 6 節後四項）：✅ commit 301e807 + 0d27d4c；主管串：Vite 聽 `*:5173`、`http://192.168.0.120:5173/api/health` 經 proxy 回 ok；首頁 Recent groups 有「吃飯飯」可點回；「‹ Groups」連結回首頁；Share 桌面顯示 Link copied（手機模擬走 navigator.share，面板不可見）；375px sheet 捲到底提示完整；direct 模式卡卡只剩 → cindy $400
+- 驗證（第 6 節後四項）：✅ commit 301e807 + 0d27d4c；審查：Vite 聽 `*:5173`、`http://192.168.0.120:5173/api/health` 經 proxy 回 ok；首頁 Recent groups 有「吃飯飯」可點回；「‹ Groups」連結回首頁；Share 桌面顯示 Link copied（手機模擬走 navigator.share，面板不可見）；375px sheet 捲到底提示完整；direct 模式卡卡只剩 → cindy $400
 
 ## 7. 新功能：還款記錄與成員離開
-- [x] 後端：`settlements` 表、`members.left_at`（ALTER TABLE 升級）、`balances`/`settleDirect` 納入還款、三個新 endpoint、42 測試全綠（commit e4cd2b3；主管串用 app.db 副本驗證 Mark paid 後方案縮減、同人還款 400、left 旗標）
+- [x] 後端：`settlements` 表、`members.left_at`（ALTER TABLE 升級）、`balances`/`settleDirect` 納入還款、三個新 endpoint、42 測試全綠（commit e4cd2b3；審查用 app.db 副本驗證 Mark paid 後方案縮減、同人還款 400、left 旗標）
 - [ ] 前端：settle 列 Mark paid、Payments 區、成員 Left／Rejoin、sheet 內離開者預設排除、餘額 Left 小節（session，等後端完成）
 - [ ] README 補兩個功能的取捨（還款是資料不是旗標；離開是旗標不是刪除）
 
