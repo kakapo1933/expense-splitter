@@ -47,6 +47,8 @@ type Inputs = Record<string, string>;
 
 function initialState(members: Member[], groupId: string, expense?: Expense) {
   const ids = members.map((m) => m.id);
+  // Left members are never a default payer or default participant (SPEC "Leaving is a flag").
+  const activeIds = members.filter((m) => !m.leftAt).map((m) => m.id);
   const last = readLastPayer(groupId);
   const inputs = (mode: SplitMode): Inputs => {
     const out: Inputs = {};
@@ -56,9 +58,9 @@ function initialState(members: Member[], groupId: string, expense?: Expense) {
   return {
     description: expense?.description ?? "",
     amount: expense ? centsToDecimal(expense.amountCents) : "",
-    payerId: expense?.payerId ?? (last && ids.includes(last) ? last : ids[0] ?? ""),
+    payerId: expense?.payerId ?? (last && activeIds.includes(last) ? last : activeIds[0] ?? ids[0] ?? ""),
     mode: expense?.splitMode ?? ("equal" as SplitMode),
-    equalIds: new Set(expense?.splitMode === "equal" ? expense.splits.map((s) => s.memberId) : ids),
+    equalIds: new Set(expense?.splitMode === "equal" ? expense.splits.map((s) => s.memberId) : activeIds),
     exact: inputs("exact"),
     percent: inputs("percent"),
   };
@@ -96,6 +98,8 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
   const amountError = amountTouched && cents === null ? "Enter an amount like 12.50 (digits, up to 2 decimals)" : amountTouched && cents === 0 ? "Amount must be more than $0.00" : null;
   const payer = members.find((m) => m.id === payerId);
   const idx = (id: string) => members.findIndex((m) => m.id === id);
+  const activeMembers = members.filter((m) => !m.leftAt);
+  const leftMembers = members.filter((m) => m.leftAt);
 
   // ---- split previews (display only) ----
   const equalMembers = members.filter((m) => equalIds.has(m.id)); // member order, as the server sorts
@@ -103,11 +107,13 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
   const equalRemainder = cents !== null && equalMembers.length ? cents % equalMembers.length : 0;
 
   const exactParsed = members.map((m) => ({ m, cents: (exact[m.id] ?? "").trim() === "" ? 0 : parseCents(exact[m.id] ?? "") }));
+  const exactById = new Map(exactParsed.map((r) => [r.m.id, r]));
   const exactInvalid = exactParsed.some((r) => r.cents === null);
   const exactSum = exactParsed.reduce((a, r) => a + (r.cents ?? 0), 0);
   const exactDiff = cents !== null ? cents - exactSum : null;
 
   const pctParsed = members.map((m) => ({ m, bp: (percent[m.id] ?? "").trim() === "" ? 0 : parseBasisPoints(percent[m.id] ?? "") }));
+  const pctById = new Map(pctParsed.map((r) => [r.m.id, r]));
   const pctInvalid = pctParsed.some((r) => r.bp === null);
   const pctSum = pctParsed.reduce((a, r) => a + (r.bp ?? 0), 0);
   const pctOk = !pctInvalid && Math.abs(pctSum - 10000) <= PERCENT_TOLERANCE_BP;
@@ -179,6 +185,74 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
       return next;
     });
 
+  // Renderers shared by the active and "Left" groups. Avatar colour follows the member's index in
+  // the full list so it matches the header; a left member's chip is dimmed but still selectable.
+  const gone = (m: Member) => (m.leftAt ? "gone" : "");
+  const payerChip = (m: Member) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={m.id === payerId}
+      className={`chip ${gone(m)} ${m.id === payerId ? "on" : ""}`}
+      key={m.id}
+      onClick={() => setPayerId(m.id)}
+    >
+      <Avatar name={m.name} index={idx(m.id)} size={18} />
+      {m.name}
+    </button>
+  );
+  const equalChip = (m: Member) => (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={equalIds.has(m.id)}
+      className={`chip ${gone(m)} ${equalIds.has(m.id) ? "on" : ""}`}
+      key={m.id}
+      onClick={() => toggleEqual(m.id)}
+    >
+      <Avatar name={m.name} index={idx(m.id)} size={18} />
+      {m.name}
+    </button>
+  );
+  const exactRow = (m: Member) => (
+    <div className={`srow ${gone(m)}`} key={m.id}>
+      <label className="nm" htmlFor={`ex-${m.id}`}>
+        <Avatar name={m.name} index={idx(m.id)} size={22} />
+        {m.name}
+      </label>
+      <input
+        id={`ex-${m.id}`}
+        className={`input mini ${exactById.get(m.id)?.cents === null ? "invalid" : ""}`}
+        type="text"
+        inputMode="decimal"
+        placeholder="0.00"
+        value={exact[m.id] ?? ""}
+        onChange={(e) => setExact({ ...exact, [m.id]: e.target.value })}
+      />
+    </div>
+  );
+  const pctShareById = new Map(pctShares.map((sh) => [sh.memberId, sh.cents]));
+  const percentRow = (m: Member) => (
+    <div className={`srow ${gone(m)}`} key={m.id}>
+      <label className="nm" htmlFor={`pc-${m.id}`}>
+        <Avatar name={m.name} index={idx(m.id)} size={22} />
+        {m.name}
+      </label>
+      <div className={`input mini pct ${pctById.get(m.id)?.bp === null ? "invalid" : ""}`}>
+        <input
+          id={`pc-${m.id}`}
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={percent[m.id] ?? ""}
+          onChange={(e) => setPercent({ ...percent, [m.id]: e.target.value })}
+        />
+        <span className="ph">%</span>
+      </div>
+      <span className="res">{cents !== null && !pctInvalid ? formatCents(pctShareById.get(m.id) ?? 0) : "—"}</span>
+    </div>
+  );
+
   return (
     <div className="sheet-root" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
       <div className="dim" onClick={onClose} />
@@ -236,19 +310,9 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
         <div className="field">
           <label>Paid by</label>
           <div className="chips" role="radiogroup" aria-label="Paid by">
-            {members.map((m, i) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={m.id === payerId}
-                className={`chip ${m.id === payerId ? "on" : ""}`}
-                key={m.id}
-                onClick={() => setPayerId(m.id)}
-              >
-                <Avatar name={m.name} index={i} size={18} />
-                {m.name}
-              </button>
-            ))}
+            {activeMembers.map(payerChip)}
+            {leftMembers.length > 0 && <span className="divider">Left</span>}
+            {leftMembers.map(payerChip)}
           </div>
         </div>
 
@@ -272,19 +336,9 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
           {mode === "equal" && (
             <>
               <div className="chips mt" role="group" aria-label="Split between">
-                {members.map((m, i) => (
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={equalIds.has(m.id)}
-                    className={`chip ${equalIds.has(m.id) ? "on" : ""}`}
-                    key={m.id}
-                    onClick={() => toggleEqual(m.id)}
-                  >
-                    <Avatar name={m.name} index={i} size={18} />
-                    {m.name}
-                  </button>
-                ))}
+                {activeMembers.map(equalChip)}
+                {leftMembers.length > 0 && <span className="divider">Left</span>}
+                {leftMembers.map(equalChip)}
               </div>
               {equalMembers.length === 0 ? (
                 <div className="hint warn">Pick at least one person.</div>
@@ -316,23 +370,13 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
           {mode === "exact" && (
             <>
               <div className="split-rows mt">
-                {members.map((m, i) => (
-                  <div className="srow" key={m.id}>
-                    <label className="nm" htmlFor={`ex-${m.id}`}>
-                      <Avatar name={m.name} index={i} size={22} />
-                      {m.name}
-                    </label>
-                    <input
-                      id={`ex-${m.id}`}
-                      className={`input mini ${exactParsed[i]?.cents === null ? "invalid" : ""}`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={exact[m.id] ?? ""}
-                      onChange={(e) => setExact({ ...exact, [m.id]: e.target.value })}
-                    />
+                {activeMembers.map(exactRow)}
+                {leftMembers.length > 0 && (
+                  <div className="srow divider-row">
+                    <span className="divider">Left</span>
                   </div>
-                ))}
+                )}
+                {leftMembers.map(exactRow)}
               </div>
               {exactInvalid ? (
                 <div className="hint warn">Each amount must look like 12.50.</div>
@@ -351,28 +395,13 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
           {mode === "percent" && (
             <>
               <div className="split-rows mt">
-                {members.map((m, i) => (
-                  <div className="srow" key={m.id}>
-                    <label className="nm" htmlFor={`pc-${m.id}`}>
-                      <Avatar name={m.name} index={i} size={22} />
-                      {m.name}
-                    </label>
-                    <div className={`input mini pct ${pctParsed[i]?.bp === null ? "invalid" : ""}`}>
-                      <input
-                        id={`pc-${m.id}`}
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={percent[m.id] ?? ""}
-                        onChange={(e) => setPercent({ ...percent, [m.id]: e.target.value })}
-                      />
-                      <span className="ph">%</span>
-                    </div>
-                    <span className="res">
-                      {cents !== null && !pctInvalid ? formatCents(pctShares[i]?.cents ?? 0) : "—"}
-                    </span>
+                {activeMembers.map(percentRow)}
+                {leftMembers.length > 0 && (
+                  <div className="srow divider-row">
+                    <span className="divider">Left</span>
                   </div>
-                ))}
+                )}
+                {leftMembers.map(percentRow)}
               </div>
               {pctInvalid ? (
                 <div className="hint warn">Each percent must look like 33.33.</div>

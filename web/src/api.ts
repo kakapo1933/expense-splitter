@@ -13,6 +13,17 @@ export interface Member {
   id: string;
   name: string;
   createdAt: string;
+  /** ISO timestamp when the member left the group; null = active (SPEC "Leaving is a flag"). */
+  leftAt: string | null;
+}
+
+/** A recorded payment from → to. Enters balances like an expense paid by `from` split to `to`. */
+export interface Settlement {
+  id: string;
+  fromId: string;
+  toId: string;
+  amountCents: number;
+  createdAt: string;
 }
 
 export interface Split {
@@ -50,6 +61,8 @@ export interface GroupView {
   group: Group;
   members: Member[];
   expenses: Expense[];
+  /** Newest first. */
+  settlements: Settlement[];
   balances: Balance[];
   settlement: Transfer[];
   settlementDirect: Transfer[];
@@ -135,5 +148,11 @@ export const api = {
     fetchJson<Expense>(`/api/groups/${groupId}/expenses/${expenseId}`, { method: "PUT", body: json(input) }),
   deleteExpense: (groupId: string, expenseId: string) =>
     fetchJson<void>(`/api/groups/${groupId}/expenses/${expenseId}`, { method: "DELETE" }),
+  createSettlement: (groupId: string, input: { fromId: string; toId: string; amount: string }) =>
+    fetchJson<Settlement>(`/api/groups/${groupId}/settlements`, { method: "POST", body: json(input) }),
+  deleteSettlement: (groupId: string, settlementId: string) =>
+    fetchJson<void>(`/api/groups/${groupId}/settlements/${settlementId}`, { method: "DELETE" }),
+  setMemberLeft: (groupId: string, memberId: string, left: boolean) =>
+    fetchJson<Member>(`/api/groups/${groupId}/members/${memberId}`, { method: "PATCH", body: json({ left }) }),
   eventsUrl: (groupId: string) => `/api/groups/${groupId}/events`,
 };

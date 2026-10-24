@@ -10,16 +10,20 @@ interface Props {
   view: GroupView;
   live: LiveState;
   onAddMember: (name: string) => Promise<void>;
+  /** Mark a member as left (true) or rejoined (false). */
+  onSetLeft: (memberId: string, left: boolean) => Promise<void>;
   /** Increment to open the inline "+ member" field from elsewhere (e.g. the empty state). */
   addSignal?: number;
 }
 
-export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
+export function Header({ view, live, onAddMember, onSetLeft, addSignal = 0 }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null); // chip whose inline action is showing
+  const [leftBusy, setLeftBusy] = useState(false);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const copiedTimer = useRef<number | undefined>(undefined);
 
@@ -53,8 +57,22 @@ export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
   }
 
   const total = view.expenses.reduce((a, e) => a + e.amountCents, 0);
-  const n = view.members.length;
+  const n = view.members.filter((mem) => !mem.leftAt).length;
+  const nLeft = view.members.length - n;
   const m = view.expenses.length;
+
+  async function toggleLeft(memberId: string, left: boolean) {
+    setLeftBusy(true);
+    setError(null);
+    try {
+      await onSetLeft(memberId, left);
+      setOpenId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLeftBusy(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -113,15 +131,39 @@ export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
         </div>
       )}
       <div className="sub">
-        {n} {n === 1 ? "member" : "members"} · {m} {m === 1 ? "expense" : "expenses"} · {formatCents(total)} total
+        {n} {n === 1 ? "member" : "members"}
+        {nLeft > 0 && ` · ${nLeft} left`} · {m} {m === 1 ? "expense" : "expenses"} · {formatCents(total)} total
       </div>
       <div className="chips">
-        {view.members.map((mem, i) => (
-          <span className="chip" key={mem.id}>
-            <Avatar name={mem.name} index={i} size={18} />
-            {mem.name}
-          </span>
-        ))}
+        {view.members.map((mem, i) => {
+          const gone = Boolean(mem.leftAt);
+          const open = openId === mem.id;
+          return (
+            <span className="chip-wrap" key={mem.id}>
+              <button
+                type="button"
+                className={`chip member ${gone ? "gone" : ""} ${open ? "open" : ""}`}
+                aria-expanded={open}
+                aria-label={`${mem.name}${gone ? " (left)" : ""}`}
+                onClick={() => setOpenId(open ? null : mem.id)}
+              >
+                <Avatar name={mem.name} index={i} size={18} />
+                {mem.name}
+                {gone && <span className="tag">left</span>}
+              </button>
+              {open && (
+                <button
+                  type="button"
+                  className={`chip action ${gone ? "" : "leave"}`}
+                  disabled={leftBusy}
+                  onClick={() => void toggleLeft(mem.id, !gone)}
+                >
+                  {leftBusy ? "…" : gone ? "Rejoin" : "Mark as left"}
+                </button>
+              )}
+            </span>
+          );
+        })}
         {adding ? (
           <form className="chip-form" onSubmit={submit}>
             <input

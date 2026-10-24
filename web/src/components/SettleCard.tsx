@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { GroupView } from "../api";
+import type { GroupView, Transfer } from "../api";
 import { formatCents } from "../money";
 import { Avatar } from "./Avatar";
 
@@ -19,10 +19,36 @@ const MODES: { id: SettleMode; label: string }[] = [
   { id: "direct", label: "Pay who paid for you" },
 ];
 
-export function SettleCard({ view, onAddMember }: { view: GroupView; onAddMember: () => void }) {
+interface Props {
+  view: GroupView;
+  onAddMember: () => void;
+  /** Records a settlement for exactly this plan row (SPEC "Settlements are payments, not flags"). */
+  onMarkPaid: (t: Transfer) => Promise<void>;
+}
+
+const rowKey = (t: Transfer) => `${t.fromId}-${t.toId}`;
+
+export function SettleCard({ view, onAddMember, onMarkPaid }: Props) {
   const idx = new Map(view.members.map((m, i) => [m.id, i]));
   const name = (id: string) => view.members[idx.get(id) ?? -1]?.name ?? "?";
   const [mode, setMode] = useState<SettleMode>(readMode);
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pay(t: Transfer) {
+    const k = rowKey(t);
+    setBusyKey(k);
+    setError(null);
+    try {
+      await onMarkPaid(t);
+      setConfirmKey(null); // the row disappears or shrinks once the view refetches
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
+    }
+  }
   const pick = (m: SettleMode) => {
     setMode(m);
     try {
@@ -51,8 +77,25 @@ export function SettleCard({ view, onAddMember }: { view: GroupView; onAddMember
   } else if (n === 0) {
     body = <div className="done">All settled 🎉</div>;
   } else {
-    body = transfers.map((t) => (
-      <div className="row" key={`${t.fromId}-${t.toId}`}>
+    body = transfers.map((t) =>
+      confirmKey === rowKey(t) ? (
+        <div className="row" key={rowKey(t)}>
+          <div className="confirm-row">
+            <span>
+              Record {name(t.fromId)} → {name(t.toId)} <b className="amt">{formatCents(t.cents)}</b> as paid?
+            </span>
+            <span className="confirm-actions">
+              <button type="button" className="paid" disabled={busyKey === rowKey(t)} onClick={() => void pay(t)}>
+                {busyKey === rowKey(t) ? "Saving…" : "Paid"}
+              </button>
+              <button type="button" className="keep" onClick={() => setConfirmKey(null)}>
+                Cancel
+              </button>
+            </span>
+          </div>
+        </div>
+      ) : (
+      <div className="row" key={rowKey(t)}>
         <div className="flow">
           <span className="who">
             <Avatar name={name(t.fromId)} index={idx.get(t.fromId) ?? 0} />
@@ -67,8 +110,18 @@ export function SettleCard({ view, onAddMember }: { view: GroupView; onAddMember
           </span>
         </div>
         <span className="amt">{formatCents(t.cents)}</span>
+        <button
+          type="button"
+          className="mark-paid"
+          aria-label={`Mark ${name(t.fromId)} → ${name(t.toId)} ${formatCents(t.cents)} as paid`}
+          onClick={() => setConfirmKey(rowKey(t))}
+        >
+          <span className="txt">Mark paid</span>
+          <span className="ico" aria-hidden="true">✓</span>
+        </button>
       </div>
-    ));
+      ),
+    );
   }
 
   return (
@@ -98,6 +151,11 @@ export function SettleCard({ view, onAddMember }: { view: GroupView; onAddMember
         </div>
       )}
       {body}
+      {error && (
+        <div className="hint warn" role="alert">
+          {error}
+        </div>
+      )}
     </section>
   );
 }
