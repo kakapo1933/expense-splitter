@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS members (
   group_id   TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
   created_at TEXT NOT NULL,
+  left_at    TEXT,             -- set when the member leaves mid-trip; NULL = active (see migrate())
   UNIQUE (group_id, name)
 );
 CREATE INDEX IF NOT EXISTS members_group_idx ON members(group_id);
@@ -44,7 +45,33 @@ CREATE TABLE IF NOT EXISTS expense_splits (
   input_value TEXT,            -- percent / exact amount as typed; NULL for equal mode
   PRIMARY KEY (expense_id, member_id)
 );
+
+CREATE TABLE IF NOT EXISTS settlements (
+  id           TEXT PRIMARY KEY,
+  group_id     TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  from_id      TEXT NOT NULL REFERENCES members(id),
+  to_id        TEXT NOT NULL REFERENCES members(id),
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS settlements_group_idx ON settlements(group_id);
 `;
+
+/**
+ * Additive migrations for databases created before a column existed. SQLite has no
+ * ADD COLUMN IF NOT EXISTS, so check PRAGMA table_info first. Existing rows keep their data;
+ * the new column is NULL for them.
+ */
+const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  { table: "members", column: "left_at", ddl: "ALTER TABLE members ADD COLUMN left_at TEXT" },
+];
+
+function migrate(db: DatabaseSync): void {
+  for (const m of COLUMN_MIGRATIONS) {
+    const cols = db.prepare(`PRAGMA table_info(${m.table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === m.column)) db.exec(m.ddl);
+  }
+}
 
 /** Open (or create) the database and ensure the schema exists. Pass ":memory:" in tests. */
 export function openDb(path: string = process.env.DB_PATH ?? DEFAULT_DB_PATH): DatabaseSync {
@@ -53,6 +80,7 @@ export function openDb(path: string = process.env.DB_PATH ?? DEFAULT_DB_PATH): D
   if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 

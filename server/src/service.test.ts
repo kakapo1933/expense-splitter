@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { openDb } from "./db.js";
-import { ConflictError, NotFoundError, UnknownMemberError } from "./errors.js";
+import { ConflictError, NotFoundError, SameMemberError, UnknownMemberError } from "./errors.js";
 import { MoneyError } from "./money.js";
 import { createService } from "./service.js";
 
@@ -173,5 +173,101 @@ describe("service: rejections", () => {
     assert.throws(() => svc.getGroupView("nope"), NotFoundError);
     assert.throws(() => svc.addMember("nope", "x"), NotFoundError);
     assert.throws(() => svc.deleteExpense(g.id, "nope"), NotFoundError);
+  });
+});
+
+describe("service: settlements (mark paid)", () => {
+  const setup = () => {
+    const svc = fresh();
+    const g = svc.createGroup("S");
+    const a = svc.addMember(g.id, "A");
+    const b = svc.addMember(g.id, "B");
+    svc.createExpense(g.id, {
+      description: "Dinner",
+      amount: "100",
+      payerId: a.id,
+      split: { mode: "equal", memberIds: [a.id, b.id] },
+    });
+    return { svc, g, a, b };
+  };
+  const net = (svc: ReturnType<typeof fresh>, gid: string, id: string) =>
+    svc.getGroupView(gid).balances.find((x) => x.memberId === id)!.netCents;
+
+  it("recording a payment moves balances and shrinks both plans; deleting it restores them", () => {
+    const { svc, g, a, b } = setup();
+    assert.deepEqual(svc.getGroupView(g.id).settlement, [{ fromId: b.id, toId: a.id, cents: 5000 }]);
+
+    const s1 = svc.createSettlement(g.id, { fromId: b.id, toId: a.id, amount: "30" });
+    assert.equal(s1.amountCents, 3000);
+    let view = svc.getGroupView(g.id);
+    assert.deepEqual(view.settlements.map((s) => s.id), [s1.id]);
+    assert.equal(net(svc, g.id, a.id), 2000);
+    assert.equal(net(svc, g.id, b.id), -2000);
+    assert.deepEqual(view.settlement, [{ fromId: b.id, toId: a.id, cents: 2000 }]);
+    assert.deepEqual(view.settlementDirect, [{ fromId: b.id, toId: a.id, cents: 2000 }]);
+    // paid/owed include the payment (net = paid − owed holds)
+    const bb = view.balances.find((x) => x.memberId === b.id)!;
+    assert.deepEqual(bb, { memberId: b.id, paidCents: 3000, owedCents: 5000, netCents: -2000 });
+
+    const s2 = svc.createSettlement(g.id, { fromId: b.id, toId: a.id, amount: "20.00" });
+    view = svc.getGroupView(g.id);
+    assert.deepEqual(view.settlements.map((s) => s.id), [s2.id, s1.id]); // newest first
+    assert.ok(view.balances.every((x) => x.netCents === 0));
+    assert.deepEqual(view.settlement, []);
+    assert.deepEqual(view.settlementDirect, []);
+
+    svc.deleteSettlement(g.id, s2.id);
+    svc.deleteSettlement(g.id, s1.id);
+    view = svc.getGroupView(g.id);
+    assert.deepEqual(view.settlements, []);
+    assert.deepEqual(view.settlement, [{ fromId: b.id, toId: a.id, cents: 5000 }]);
+    assert.throws(() => svc.deleteSettlement(g.id, s1.id), NotFoundError);
+  });
+
+  it("rejects same member (400 SAME_MEMBER), strangers, bad amounts; unknown group 404", () => {
+    const { svc, g, a, b } = setup();
+    assert.throws(
+      () => svc.createSettlement(g.id, { fromId: a.id, toId: a.id, amount: "1" }),
+      (e: unknown) => e instanceof SameMemberError && e.code === "SAME_MEMBER",
+    );
+    const other = svc.createGroup("O");
+    const stranger = svc.addMember(other.id, "X");
+    assert.throws(() => svc.createSettlement(g.id, { fromId: stranger.id, toId: a.id, amount: "1" }), UnknownMemberError);
+    assert.throws(
+      () => svc.createSettlement(g.id, { fromId: b.id, toId: a.id, amount: "0" }),
+      (e: unknown) => e instanceof MoneyError && e.code === "INVALID_AMOUNT",
+    );
+    assert.throws(() => svc.createSettlement("nope", { fromId: b.id, toId: a.id, amount: "1" }), NotFoundError);
+    assert.deepEqual(svc.getGroupView(g.id).settlements, []);
+  });
+});
+
+describe("service: members leaving", () => {
+  it("left sets leftAt, member stays in balances and plan; clearing restores null", () => {
+    const svc = fresh();
+    const g = svc.createGroup("L");
+    const a = svc.addMember(g.id, "A");
+    const b = svc.addMember(g.id, "B");
+    assert.equal(a.leftAt, null);
+    svc.createExpense(g.id, { description: "x", amount: "10", payerId: a.id, split: { mode: "equal", memberIds: [a.id, b.id] } });
+
+    const left = svc.setMemberLeft(g.id, b.id, true);
+    assert.equal(typeof left.leftAt, "string");
+    let view = svc.getGroupView(g.id);
+    assert.deepEqual(view.members.map((m) => [m.id, m.leftAt !== null]), [[a.id, false], [b.id, true]]);
+    assert.equal(view.balances.find((x) => x.memberId === b.id)!.netCents, -500);
+    assert.deepEqual(view.settlement, [{ fromId: b.id, toId: a.id, cents: 500 }]);
+
+    const back = svc.setMemberLeft(g.id, b.id, false);
+    assert.equal(back.leftAt, null);
+    view = svc.getGroupView(g.id);
+    assert.ok(view.members.every((m) => m.leftAt === null));
+
+    assert.throws(() => svc.setMemberLeft(g.id, "nope", true), NotFoundError);
+    assert.throws(() => svc.setMemberLeft("nope", b.id, true), NotFoundError);
+    // a member of another group is not reachable through this group
+    const other = svc.createGroup("O");
+    const x = svc.addMember(other.id, "X");
+    assert.throws(() => svc.setMemberLeft(g.id, x.id, true), NotFoundError);
   });
 });

@@ -1,7 +1,7 @@
 // Application logic: SQL + money.ts, no HTTP. Every write runs in one transaction.
 import type { DatabaseSync } from "node:sqlite";
 import { withTx } from "./db.js";
-import { ConflictError, NotFoundError, UnknownMemberError } from "./errors.js";
+import { ConflictError, NotFoundError, SameMemberError, UnknownMemberError } from "./errors.js";
 import {
   balances,
   parseAmount,
@@ -13,7 +13,7 @@ import {
   type Balance,
   type Transfer,
 } from "./money.js";
-import type { ExpenseInput } from "./schemas.js";
+import type { ExpenseInput, SettlementInput } from "./schemas.js";
 
 // ---- Public view types (what GET /api/groups/:id returns; see SPEC "API") ----
 
@@ -26,6 +26,15 @@ export interface GroupRow {
 export interface MemberRow {
   id: string;
   name: string;
+  createdAt: string;
+  /** ISO timestamp when the member left the group; null = active. History is kept either way. */
+  leftAt: string | null;
+}
+export interface SettlementView {
+  id: string;
+  fromId: string;
+  toId: string;
+  amountCents: number;
   createdAt: string;
 }
 export interface SplitRow {
@@ -48,6 +57,8 @@ export interface GroupView {
   group: GroupRow;
   members: MemberRow[];
   expenses: ExpenseView[];
+  /** Recorded payments, newest first. */
+  settlements: SettlementView[];
   balances: Balance[];
   settlement: Transfer[];
   settlementDirect: Transfer[];
@@ -66,11 +77,26 @@ export function createService(db: DatabaseSync) {
       "SELECT id, name, currency, created_at AS createdAt FROM groups WHERE id = ?",
     ),
     insertMember: db.prepare("INSERT INTO members (id, group_id, name, created_at) VALUES (?, ?, ?, ?)"),
-    getMember: db.prepare("SELECT id, name, created_at AS createdAt FROM members WHERE id = ?"),
+    getMember: db.prepare(
+      "SELECT id, name, created_at AS createdAt, left_at AS leftAt FROM members WHERE id = ? AND group_id = ?",
+    ),
+    setMemberLeft: db.prepare("UPDATE members SET left_at = ? WHERE id = ? AND group_id = ?"),
     // Member order = insertion order = SQLite rowid (SPEC "Money logic"). Never a timestamp:
     // two inserts in the same millisecond would tie and fall back to random UUID order.
     listMembers: db.prepare(
-      "SELECT id, name, created_at AS createdAt FROM members WHERE group_id = ? ORDER BY rowid",
+      "SELECT id, name, created_at AS createdAt, left_at AS leftAt FROM members WHERE group_id = ? ORDER BY rowid",
+    ),
+    insertSettlement: db.prepare(
+      "INSERT INTO settlements (id, group_id, from_id, to_id, amount_cents, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ),
+    deleteSettlement: db.prepare("DELETE FROM settlements WHERE id = ? AND group_id = ?"),
+    getSettlement: db.prepare(
+      `SELECT id, from_id AS fromId, to_id AS toId, amount_cents AS amountCents, created_at AS createdAt
+       FROM settlements WHERE id = ? AND group_id = ?`,
+    ),
+    listSettlements: db.prepare(
+      `SELECT id, from_id AS fromId, to_id AS toId, amount_cents AS amountCents, created_at AS createdAt
+       FROM settlements WHERE group_id = ? ORDER BY rowid DESC`,
     ),
     insertExpense: db.prepare(
       `INSERT INTO expenses (id, group_id, payer_id, description, amount_cents, split_mode, created_at, updated_at)
@@ -175,7 +201,37 @@ export function createService(db: DatabaseSync) {
         if (isUniqueViolation(e)) throw new ConflictError(`member "${name}" already exists in this group`);
         throw e;
       }
-      return q.getMember.get(id) as unknown as MemberRow;
+      return q.getMember.get(id, groupId) as unknown as MemberRow;
+    },
+
+    /** Leaving is a flag, not a delete: the member stays in balances and in the plan. Reversible. */
+    setMemberLeft(groupId: string, memberId: string, left: boolean): MemberRow {
+      requireGroup(groupId);
+      const { changes } = q.setMemberLeft.run(left ? now() : null, memberId, groupId);
+      if (changes === 0) throw new NotFoundError("member");
+      return q.getMember.get(memberId, groupId) as unknown as MemberRow;
+    },
+
+    /** "Mark paid": records a payment from → to. Enters balances like an expense paid by `from` split to `to`. */
+    createSettlement(groupId: string, input: SettlementInput): SettlementView {
+      requireGroup(groupId);
+      if (input.fromId === input.toId) throw new SameMemberError();
+      return withTx(db, () => {
+        const members = q.listMembers.all(groupId) as unknown as MemberRow[];
+        const known = new Set(members.map((m) => m.id));
+        const unknown = [input.fromId, input.toId].filter((id) => !known.has(id));
+        if (unknown.length) throw new UnknownMemberError(unknown);
+        const amountCents = parseAmount(input.amount);
+        const id = uuid();
+        q.insertSettlement.run(id, groupId, input.fromId, input.toId, amountCents, now());
+        return q.getSettlement.get(id, groupId) as unknown as SettlementView;
+      });
+    },
+
+    deleteSettlement(groupId: string, settlementId: string): void {
+      requireGroup(groupId);
+      const { changes } = q.deleteSettlement.run(settlementId, groupId);
+      if (changes === 0) throw new NotFoundError("settlement");
     },
 
     createExpense(groupId: string, input: ExpenseInput): ExpenseView {
@@ -220,15 +276,17 @@ export function createService(db: DatabaseSync) {
         (byExpense.get(expenseId) ?? byExpense.set(expenseId, []).get(expenseId)!).push(s);
       }
       const expenses = expenseRows.map((e) => ({ ...e, splits: byExpense.get(e.id) ?? [] }));
+      const settlements = q.listSettlements.all(groupId) as unknown as SettlementView[];
       const memberIds = members.map((m) => m.id);
-      const bals = balances(expenses, memberIds);
+      const bals = balances(expenses, memberIds, settlements);
       return {
         group,
         members,
         expenses,
+        settlements,
         balances: bals,
         settlement: settle(bals),
-        settlementDirect: settleDirect(expenses, memberIds),
+        settlementDirect: settleDirect(expenses, memberIds, settlements),
       };
     },
   };

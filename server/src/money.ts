@@ -177,15 +177,42 @@ export interface Balance {
   netCents: number;
 }
 
-/** paid − owed per member, in memberIds order. Members with no activity appear as zeros. */
-export function balances(expenses: ExpenseLike[], memberIds: string[]): Balance[] {
+/** A recorded payment from one member to another ("mark paid"). */
+export interface SettlementLike {
+  fromId: string;
+  toId: string;
+  amountCents: number;
+}
+
+/**
+ * A settlement enters the books like an expense paid by `from` whose only split is `to`
+ * (SPEC "Data model"): from +amount, to −amount. One conversion feeds both `balances` and
+ * `settleDirect`, so the two never disagree on what a payment means.
+ */
+function settlementsAsExpenses(settlements: SettlementLike[]): ExpenseLike[] {
+  return settlements.map((s) => ({
+    payerId: s.fromId,
+    amountCents: s.amountCents,
+    splits: [{ memberId: s.toId, shareCents: s.amountCents }],
+  }));
+}
+
+/**
+ * paid − owed per member, in memberIds order. Members with no activity appear as zeros.
+ * Settlements count as `from` paid and `to` owed, so paidCents/owedCents include them.
+ */
+export function balances(
+  expenses: ExpenseLike[],
+  memberIds: string[],
+  settlements: SettlementLike[] = [],
+): Balance[] {
   const paid = new Map<string, number>();
   const owed = new Map<string, number>();
   for (const id of memberIds) {
     paid.set(id, 0);
     owed.set(id, 0);
   }
-  for (const e of expenses) {
+  for (const e of [...expenses, ...settlementsAsExpenses(settlements)]) {
     paid.set(e.payerId, (paid.get(e.payerId) ?? 0) + e.amountCents);
     for (const s of e.splits) {
       owed.set(s.memberId, (owed.get(s.memberId) ?? 0) + s.shareCents);
@@ -238,13 +265,18 @@ export function settle(bals: Pick<Balance, "memberId" | "netCents">[]): Transfer
  * debt[member→payer] += share. Each unordered pair is netted (a→b − b→a) into one transfer
  * for the positive side. More transfers than `settle`, but every transfer goes to someone
  * who actually paid for you. Sorted by amount desc, ties by member order (from, then to).
+ * A settlement from→to is a debt to→from of the same amount, i.e. it cancels from→to.
  */
-export function settleDirect(expenses: ExpenseLike[], memberIds: string[]): Transfer[] {
+export function settleDirect(
+  expenses: ExpenseLike[],
+  memberIds: string[],
+  settlements: SettlementLike[] = [],
+): Transfer[] {
   const order = new Map(memberIds.map((id, i) => [id, i]));
   const rank = (id: string) => order.get(id) ?? Number.MAX_SAFE_INTEGER;
   // Keyed by canonical pair "lo|hi" (member order); value = net owed from lo to hi (signed).
   const net = new Map<string, number>();
-  for (const e of expenses) {
+  for (const e of [...expenses, ...settlementsAsExpenses(settlements)]) {
     for (const s of e.splits) {
       if (s.memberId === e.payerId || s.shareCents === 0) continue;
       const loFirst = rank(s.memberId) <= rank(e.payerId);

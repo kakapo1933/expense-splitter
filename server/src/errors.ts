@@ -16,6 +16,16 @@ export class ConflictError extends Error {
   }
 }
 
+/** A settlement whose payer and payee are the same member. */
+export class SameMemberError extends Error {
+  readonly status = 400;
+  readonly code = "SAME_MEMBER";
+  constructor() {
+    super("fromId and toId must be different members");
+    this.name = "SameMemberError";
+  }
+}
+
 /** A request that parses but references members outside the group. */
 export class UnknownMemberError extends Error {
   readonly status = 400;

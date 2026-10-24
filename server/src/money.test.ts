@@ -189,6 +189,41 @@ describe("balances", () => {
   });
 });
 
+describe("settlements (mark paid) in balances / settleDirect", () => {
+  const members = ["A", "B"];
+  const expenses = [{ payerId: "A", amountCents: 10000, splits: splitEqual(10000, members) }];
+
+  test("B repays A 50 → every net 0, both plans empty; paid/owed reflect the payment", () => {
+    const paid = [{ fromId: "B", toId: "A", amountCents: 5000 }];
+    const b = balances(expenses, members, paid);
+    assert.deepEqual(b, [
+      { memberId: "A", paidCents: 10000, owedCents: 10000, netCents: 0 },
+      { memberId: "B", paidCents: 5000, owedCents: 5000, netCents: 0 },
+    ]);
+    assert.deepEqual(settle(b), []);
+    assert.deepEqual(settleDirect(expenses, members, paid), []);
+  });
+
+  test("B repays A 30 → plan shrinks to B→A 20 in both modes", () => {
+    const paid = [{ fromId: "B", toId: "A", amountCents: 3000 }];
+    const b = balances(expenses, members, paid);
+    assert.deepEqual(b.map((x) => x.netCents), [2000, -2000]);
+    assert.deepEqual(settle(b), [{ fromId: "B", toId: "A", cents: 2000 }]);
+    assert.deepEqual(settleDirect(expenses, members, paid), [{ fromId: "B", toId: "A", cents: 2000 }]);
+  });
+
+  test("omitting the third argument is the old behaviour", () => {
+    assert.deepEqual(balances(expenses, members), balances(expenses, members, []));
+    assert.deepEqual(settleDirect(expenses, members), settleDirect(expenses, members, []));
+  });
+
+  test("overpayment flips the direction", () => {
+    const paid = [{ fromId: "B", toId: "A", amountCents: 6000 }];
+    assert.deepEqual(settle(balances(expenses, members, paid)), [{ fromId: "A", toId: "B", cents: 1000 }]);
+    assert.deepEqual(settleDirect(expenses, members, paid), [{ fromId: "A", toId: "B", cents: 1000 }]);
+  });
+});
+
 describe("settle", () => {
   test("three-way: two transfers, from debtors to creditor, everyone zeroed", () => {
     const members = ["A", "B", "C"];

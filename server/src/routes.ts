@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { ZodType } from "zod";
 import { publish, subscribe } from "./events.js";
-import { ExpenseInput, NameInput } from "./schemas.js";
+import { ExpenseInput, MemberPatch, NameInput, SettlementInput } from "./schemas.js";
 import type { Service } from "./service.js";
 
 const KEEPALIVE_MS = 25_000;
@@ -52,6 +52,29 @@ export function createRoutes(svc: Service) {
   api.delete("/groups/:id/expenses/:eid", (c) => {
     const { id: groupId, eid } = c.req.param();
     svc.deleteExpense(groupId, eid);
+    publish(groupId);
+    return c.body(null, 204);
+  });
+
+  api.patch("/groups/:id/members/:mid", async (c) => {
+    const { id: groupId, mid } = c.req.param();
+    const { left } = await parseBody(c.req.raw, MemberPatch);
+    const member = svc.setMemberLeft(groupId, mid, left);
+    publish(groupId);
+    return c.json(member);
+  });
+
+  api.post("/groups/:id/settlements", async (c) => {
+    const groupId = c.req.param("id");
+    const input = await parseBody(c.req.raw, SettlementInput);
+    const settlement = svc.createSettlement(groupId, input);
+    publish(groupId);
+    return c.json(settlement, 201);
+  });
+
+  api.delete("/groups/:id/settlements/:sid", (c) => {
+    const { id: groupId, sid } = c.req.param();
+    svc.deleteSettlement(groupId, sid);
     publish(groupId);
     return c.body(null, 204);
   });

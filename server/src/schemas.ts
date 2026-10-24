@@ -27,3 +27,17 @@ export const ExpenseInput = z.object({
   ]),
 });
 export type ExpenseInput = z.infer<typeof ExpenseInput>;
+
+/** "Mark paid": a payment from one member to another. from ≠ to is checked in the service. */
+export const SettlementInput = z.object({
+  fromId: z.string().min(1),
+  toId: z.string().min(1),
+  amount: decimalString,
+});
+export type SettlementInput = z.infer<typeof SettlementInput>;
+
+/** Member leaving (left: true sets left_at) or rejoining (left: false clears it). */
+export const MemberPatch = z.object({
+  left: z.boolean(),
+});
+export type MemberPatch = z.infer<typeof MemberPatch>;
