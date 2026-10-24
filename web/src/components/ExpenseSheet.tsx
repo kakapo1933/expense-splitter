@@ -193,6 +193,7 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
           )}
         </div>
 
+        <div className="sheet-body">
         <div className="field">
           <label htmlFor="f-desc">Description</label>
           <input
@@ -303,11 +304,11 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
                           .map((m) => m.name)
                           .join(", ")} (first ${equalRemainder === 1 ? "member" : "members"}). `
                       : "Splits evenly, no leftover cents. "}
-                    Tap a name to exclude them.
+                    Tap a name to exclude or include them.
                   </div>
                 </>
               ) : (
-                <div className="hint">Tap a name to exclude them.</div>
+                <div className="hint">Tap a name to exclude or include them.</div>
               )}
             </>
           )}
@@ -410,6 +411,8 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
             {error}
           </div>
         )}
+
+        </div>
 
         <div className="actions">
           <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>

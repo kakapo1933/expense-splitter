@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { isComposingEnter } from "../keys";
+import { readRecent, relativeDay } from "../recent";
 import { navigate } from "../router";
 
 export function CreateGroup() {
@@ -9,6 +10,7 @@ export function CreateGroup() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recent] = useState(readRecent);
 
   function addDraft() {
     const t = draft.trim();
@@ -47,6 +49,17 @@ export function CreateGroup() {
       </div>
       <h1>Split a trip</h1>
       <p>Name the group, add who's coming. Share the link afterwards — no sign-up.</p>
+      {recent.length > 0 && (
+        <section className="recent" aria-labelledby="recent-h">
+          <h2 id="recent-h">Recent groups</h2>
+          {recent.map((r) => (
+            <button type="button" className="recent-row" key={r.id} onClick={() => navigate(`/g/${r.id}`)}>
+              <span className="nm">{r.name}</span>
+              <span className="when">{relativeDay(r.lastVisited)}</span>
+            </button>
+          ))}
+        </section>
+      )}
       <form onSubmit={submit} noValidate>
         <div className="field">
           <label htmlFor="g-name">Group name</label>

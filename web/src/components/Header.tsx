@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { GroupView } from "../api";
 import { isComposingEnter } from "../keys";
 import { formatCents } from "../money";
@@ -18,10 +18,38 @@ export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const copiedTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (addSignal > 0) setAdding(true);
   }, [addSignal]);
+
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
+
+  // The group URL is the invite link: native share sheet on phones, clipboard elsewhere,
+  // and a selectable URL when neither is available (http over LAN has no clipboard API).
+  async function share() {
+    const url = location.href;
+    setFallbackUrl(null);
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: view.group.name, url });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return; // user dismissed
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFallbackUrl(url);
+    }
+  }
 
   const total = view.expenses.reduce((a, e) => a + e.amountCents, 0);
   const n = view.members.length;
@@ -51,10 +79,27 @@ export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
     <header className="app-header">
       <div className="title-row">
         <h1>{view.group.name}</h1>
-        <span className={`live ${live === "live" ? "" : "off"}`} role="status">
-          {live === "live" ? "live" : live === "connecting" ? "connecting…" : "reconnecting…"}
-        </span>
+        <div className="hdr-right">
+          <span className={`live ${live === "live" ? "" : "off"}`} role="status">
+            {live === "live" ? "live" : live === "connecting" ? "connecting…" : "reconnecting…"}
+          </span>
+          <button
+            type="button"
+            className={`share ${copied ? "done" : ""}`}
+            onClick={() => void share()}
+            aria-label="Share group link"
+            aria-live="polite"
+          >
+            {copied ? "Link copied" : "Share"}
+          </button>
+        </div>
       </div>
+      {fallbackUrl && (
+        <div className="share-fallback">
+          Couldn't copy automatically — select the link:
+          <input className="input" readOnly value={fallbackUrl} onFocus={(e) => e.currentTarget.select()} />
+        </div>
+      )}
       <div className="sub">
         {n} {n === 1 ? "member" : "members"} · {m} {m === 1 ? "expense" : "expenses"} · {formatCents(total)} total
       </div>

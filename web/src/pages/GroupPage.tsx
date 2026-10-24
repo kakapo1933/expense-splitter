@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Expense, type ExpenseInput } from "../api";
 import { BalancesCard } from "../components/BalancesCard";
 import { ExpenseList } from "../components/ExpenseList";
 import { ExpenseSheet } from "../components/ExpenseSheet";
 import { Header } from "../components/Header";
 import { SettleCard } from "../components/SettleCard";
+import { forgetGroup, recordVisit } from "../recent";
 import { navigate } from "../router";
 import { useGroup } from "../useGroup";
 
@@ -16,6 +17,14 @@ export function GroupPage({ id }: { id: string }) {
   const [addMemberSignal, setAddMemberSignal] = useState(0);
 
   const closeSheet = useCallback(() => setSheet({ open: false }), []);
+
+  // Recent groups (per browser): remember every successful load, forget a 404'd id.
+  useEffect(() => {
+    if (view) recordVisit(id, view.group.name);
+  }, [id, view]);
+  useEffect(() => {
+    if (notFound) forgetGroup(id);
+  }, [id, notFound]);
 
   const addMember = useCallback(
     async (name: string) => {
