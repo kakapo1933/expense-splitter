@@ -39,7 +39,7 @@
 - 備註：第一版 members `ORDER BY created_at, id`，同毫秒建立時順序隨 UUID 浮動、餘數歸屬不確定；主管串跑測試抓到，spec 改成 rowid 後修正
 
 ## 4. 前端
-- [ ] 設計稿：手機版三區塊（header／餘額+settle／支出列表+記帳 sheet）的靜態稿，確認後才實作
+- [x] 設計稿：design session 做研究 + codex 概念圖 + 六畫面 mockup（commit d989387），使用者確認採卡片式
 - [ ] `/` 建群組 → 導向 `/g/:id`
 - [ ] `/g/:id`：header（群名、成員 chips、+ 成員）
 - [ ] 餘額卡 + settle-up 清單
