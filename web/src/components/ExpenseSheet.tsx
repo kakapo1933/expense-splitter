@@ -3,6 +3,7 @@
 // for display only; the saved result is whatever the server returns.
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Expense, ExpenseInput, Member, SplitMode } from "../api";
+import { isComposingEnter } from "../keys";
 import {
   centsToDecimal,
   formatCents,
@@ -213,6 +214,7 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onKeyDown={(e) => {
+              if (isComposingEnter(e)) return;
               if (e.key === "Enter") {
                 e.preventDefault();
                 document.getElementById("f-amount")?.focus();

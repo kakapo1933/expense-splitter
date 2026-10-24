@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { GroupView } from "../api";
+import { isComposingEnter } from "../keys";
 import { formatCents } from "../money";
 import type { LiveState } from "../useGroup";
 import { Avatar } from "./Avatar";
@@ -78,6 +79,11 @@ export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
                 if (!name.trim()) setAdding(false);
               }}
               onKeyDown={(e) => {
+                // Enter inside the form submits implicitly; swallow the IME-confirm Enter.
+                if (isComposingEnter(e)) {
+                  e.preventDefault();
+                  return;
+                }
                 if (e.key === "Escape") {
                   setName("");
                   setAdding(false);

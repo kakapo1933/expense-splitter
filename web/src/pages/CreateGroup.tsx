@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
+import { isComposingEnter } from "../keys";
 import { navigate } from "../router";
 
 export function CreateGroup() {
@@ -84,6 +85,7 @@ export function CreateGroup() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
+                if (isComposingEnter(e)) return;
                 if (e.key === "Enter") {
                   e.preventDefault();
                   addDraft();
