@@ -135,7 +135,7 @@ id 一律 UUID v4（`crypto.randomUUID()`），群組 URL 不可猜。
 金額欄用 `inputmode="decimal"`。
 
 路由：`/` 建群組（完成後導向）；`/g/:id` 群組頁。群組 URL 就是邀請連結；群組頁有
-**Copy link** 按鈕（手機用 `navigator.share`，否則寫剪貼簿）。
+**Copy link** 按鈕（手機用 `navigator.share`，否則寫剪貼簿），以及回 `/` 的**首頁連結**（建新群組或選最近的群組）。
 
 **最近的群組**（沒有帳號，所以是每個瀏覽器各自記）：每次成功載入 `/g/:id` 就把
 `{id, name, lastVisited}` 存進 localStorage；`/` 在建群表單上方列出，最近的在前，群組 404 時移除。

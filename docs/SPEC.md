@@ -142,7 +142,8 @@ Fastest path to log an expense: description + amount + submit (payer defaults to
 split defaults to equal across all members). `inputmode="decimal"` on amount.
 
 Routes: `/` create a group (then redirect); `/g/:id` group page. The group URL is the invite link;
-the group page has a **Copy link** button (`navigator.share` on phones, clipboard otherwise).
+the group page has a **Copy link** button (`navigator.share` on phones, clipboard otherwise) and a
+**home link** back to `/` (to start another group or pick a recent one).
 
 **Recent groups** (no accounts, so per browser): every successful load of `/g/:id` stores
 `{id, name, lastVisited}` in localStorage; `/` lists them above the create form, most recent first,

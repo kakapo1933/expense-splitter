@@ -64,4 +64,4 @@
 - [ ] 記帳 sheet：捲動區底部被 sticky footer 壓到，最後一行（提示／預覽）看不清 → 捲動區加 padding-bottom ≥ footer 高度；平分提示改「Tap a name to exclude or include them.」
 - [ ] 群組頁缺「Copy link / Share」按鈕（建群頁寫 Share the link afterwards 但沒地方複製）；Vite 只聽 localhost，手機同網段連不到 → `server.host: true` + README 寫手機測試步驟（等 settle-direct 完成後開 session）
 - [ ] 首頁列出「最近的群組」（localStorage，每瀏覽器各自記；spec 已補）
-
+- [ ] 群組頁沒有回首頁的入口，無法離開去建新群組 → header 加回 `/` 的連結（併入 web-polish）
