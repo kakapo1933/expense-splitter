@@ -40,14 +40,15 @@
 
 ## 4. 前端
 - [x] 設計稿：design session 做研究 + codex 概念圖 + 六畫面 mockup（commit d989387），使用者確認採卡片式
-- [ ] `/` 建群組 → 導向 `/g/:id`
-- [ ] `/g/:id`：header（群名、成員 chips、+ 成員）
-- [ ] 餘額卡 + settle-up 清單
-- [ ] 支出列表（點一筆進編輯）、刪除
-- [ ] 底部「+ 記一筆」bottom sheet：描述、金額、付款人、分法三模式
-- [ ] SSE 訂閱 → 重抓
-- [ ] 手機寬度排版
-- 驗證：Browser pane 兩個分頁同一群組，一邊記帳另一邊即時更新；375px 寬無跑版；截圖存 `docs/evidence/`
+- [x] `/` 建群組（可同時加成員）→ 導向 `/g/:id`
+- [x] `/g/:id`：header（群名、成員 chips、+ member、live 小點）
+- [x] settle-up 卡（accent 邊框，提到餘額之上）+ 餘額卡（綠 +／紅 −／灰 settled）
+- [x] 支出列表（點一筆進編輯、回填原輸入）、刪除需 confirm
+- [x] 底部「+ Add expense」bottom sheet：描述、金額、「Kai paid · split equally among 3」摘要列展開付款人與三模式、即時預覽與餘數提示、壞輸入訊息
+- [x] SSE 訂閱 → 重抓
+- [x] 375px 排版無橫向捲動
+- 驗證：✅ commit 35582c0；主管串 Browser pane 實測：建群 + 三人 → $100 平分（預覽 33.34/33.33/33.33）→ $30 percent 50/25/25（加總 90 時 Save 鎖住並提示）→ 餘額手算一致 → 第二分頁不重整收到刪除後更新（SSE）→ 編輯回填 50/25/25 → 375px `scrollWidth == innerWidth`。截圖：`docs/evidence/`（web session 9 張 + 主管串 2 張）
+- 備註：exact 模式主管串未親測（web session 有截圖 `sheet-exact-desktop.jpg`，API 層已 curl 驗過）
 
 ## 5. 交付
 - [ ] README：安裝與執行、設計決策（從 SPEC 濃縮）、取捨、next steps
