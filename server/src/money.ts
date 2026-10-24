@@ -116,18 +116,31 @@ export function splitPercent(
       index: i,
     };
   });
-  let leftover = totalCents - rows.reduce((a, r) => a + r.floor, 0);
-  // Largest remainder first; ties by input order. Stable sort of a copy keeps `rows` in input order.
-  const order = [...rows].sort((a, b) => b.remainder - a.remainder || a.index - b.index);
-  const extra = new Map<string, number>();
-  for (const r of order) {
-    if (leftover <= 0) break;
-    extra.set(r.memberId, 1);
-    leftover -= 1;
+  // Residual = total − Σfloor. Under the ±0.01 tolerance it may exceed one cent per member
+  // (33.33 × 3) or be negative (50 + 50.01), so cycle until Σ share = total exactly.
+  const cents = rows.map((r) => r.floor);
+  let residual = totalCents - cents.reduce((a, b) => a + b, 0);
+  if (residual > 0) {
+    // Largest remainder first; ties by input order.
+    const order = [...rows].sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+    for (let k = 0; residual > 0; k = (k + 1) % order.length) {
+      cents[order[k]!.index]! += 1;
+      residual -= 1;
+    }
+  } else if (residual < 0) {
+    // Smallest remainder first; ties by input order. Never push a share below 0.
+    const order = [...rows].sort((a, b) => a.remainder - b.remainder || a.index - b.index);
+    // Σ cents = total − residual > total > 0, so at least one share is positive each cycle.
+    for (let k = 0; residual < 0; k = (k + 1) % order.length) {
+      const idx = order[k]!.index;
+      if (cents[idx]! === 0) continue;
+      cents[idx]! -= 1;
+      residual += 1;
+    }
   }
   return rows.map((r) => ({
     memberId: r.memberId,
-    shareCents: r.floor + (extra.get(r.memberId) ?? 0),
+    shareCents: cents[r.index]!,
     inputValue: r.inputValue,
   }));
 }

@@ -92,6 +92,37 @@ describe("splitPercent", () => {
       "PERCENT_SUM_MISMATCH",
     );
   });
+  test("positive residual beyond one cent per member: $1000 at 33.33 × 3", () => {
+    const r = splitPercent(100000, [
+      { memberId: "a", percent: "33.33" },
+      { memberId: "b", percent: "33.33" },
+      { memberId: "c", percent: "33.33" },
+    ]);
+    assert.equal(sum(r), 100000);
+    const cents = r.map((x) => x.shareCents);
+    assert.ok(Math.max(...cents) - Math.min(...cents) <= 1);
+    assert.deepEqual(cents, [33334, 33333, 33333]);
+  });
+  test("negative residual: $1000 at 50 / 50.01 sums to total", () => {
+    const r = splitPercent(100000, [
+      { memberId: "a", percent: "50" },
+      { memberId: "b", percent: "50.01" },
+    ]);
+    assert.equal(sum(r), 100000);
+    // floors are 50000 / 50010 (residual −10); both remainders are 0 so the cut alternates.
+    assert.deepEqual(r.map((x) => x.shareCents), [49995, 50005]);
+    for (const x of r) assert.ok(x.shareCents >= 49990 && x.shareCents <= 50010);
+  });
+  test("negative residual never pushes a 0% share below zero", () => {
+    const r = splitPercent(100000, [
+      { memberId: "a", percent: "0" },
+      { memberId: "b", percent: "0.01" },
+      { memberId: "c", percent: "99.99" },
+    ]);
+    assert.equal(sum(r), 100000);
+    assert.equal(r[0]!.shareCents, 0);
+    for (const x of r) assert.ok(x.shareCents >= 0);
+  });
   test("rejects bad percent strings", () => {
     throwsMoney(() => splitPercent(100, [{ memberId: "a", percent: "33.333" }, { memberId: "b", percent: "66.667" }]), "INVALID_PERCENT");
     throwsMoney(() => splitPercent(100, [{ memberId: "a", percent: "-10" }, { memberId: "b", percent: "110" }]), "INVALID_PERCENT");
