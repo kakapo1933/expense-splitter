@@ -62,13 +62,13 @@
 - [x] 回報「後面新增的人被算進前面平分的帳」→ 查 `server/data/app.db`：阿咪在所有支出前加入、卡卡只出現在加入後的「電影」，沒有任何支出含記帳當時不存在的成員。實際是「加人後新支出預設全員平分」的 UX 預期落差，非計算錯誤；維持預設全員，README next steps 考慮加「記住上次參與者」
 - [x] 加 Settle 切換 Fewest payments / Pay who paid for you（commit ac91c10；35 測試全綠；審查在「吃飯飯」確認兩種方案都讓餘額歸零，direct 14 筆 vs fewest 5 筆；spec 原寫「總額相同」有誤已改）
 - [x] 記帳 sheet：捲動區底部被 sticky footer 壓到，最後一行（提示／預覽）看不清 → 捲動區加 padding-bottom ≥ footer 高度；平分提示改「Tap a name to exclude or include them.」
-- [x] 群組頁缺「Copy link / Share」按鈕（建群頁寫 Share the link afterwards 但沒地方複製）；Vite 只聽 localhost，手機同網段連不到 → `server.host: true` + README 寫手機測試步驟（等 settle-direct 完成後開 session）
+- [x] 群組頁缺「Copy link / Share」按鈕（建群頁寫 Share the link afterwards 但沒地方複製）；Vite 只聽 localhost，手機同網段連不到 → `server.host: true` + README 寫手機測試步驟（排在 settle 切換之後的實作串）
 - [x] 首頁列出「最近的群組」（localStorage，每瀏覽器各自記；spec 已補）
 - [x] 群組頁沒有回首頁的入口，無法離開去建新群組 → header 加回 `/` 的連結（併入 web-polish）
 - 驗證（第 6 節後四項）：✅ commit 301e807 + 0d27d4c；審查：Vite 聽 `*:5173`、`http://192.168.0.120:5173/api/health` 經 proxy 回 ok；首頁 Recent groups 有「吃飯飯」可點回；「‹ Groups」連結回首頁；Share 桌面顯示 Link copied（手機模擬走 navigator.share，面板不可見）；375px sheet 捲到底提示完整；direct 模式卡卡只剩 → cindy $400
 
 ## 7. 新功能：還款記錄與成員離開
 - [x] 後端：`settlements` 表、`members.left_at`（ALTER TABLE 升級）、`balances`/`settleDirect` 納入還款、三個新 endpoint、42 測試全綠（commit e4cd2b3；審查用 app.db 副本驗證 Mark paid 後方案縮減、同人還款 400、left 旗標）
-- [ ] 前端：settle 列 Mark paid、Payments 區、成員 Left／Rejoin、sheet 內離開者預設排除、餘額 Left 小節（session，等後端完成）
+- [ ] 前端：settle 列 Mark paid、Payments 區、成員 Left／Rejoin、sheet 內離開者預設排除、餘額 Left 小節（實作串，等後端完成）
 - [ ] README 補兩個功能的取捨（還款是資料不是旗標；離開是旗標不是刪除）
 
