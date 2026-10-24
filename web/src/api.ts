@@ -52,6 +52,7 @@ export interface GroupView {
   expenses: Expense[];
   balances: Balance[];
   settlement: Transfer[];
+  settlementDirect: Transfer[];
 }
 
 export type SplitInput =

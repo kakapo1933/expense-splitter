@@ -90,6 +90,8 @@ button.chip { min-height: 36px; }
 .settle .arrow { color: var(--accent); font-weight: 700; }
 .settle .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settle .amt { font-size: var(--fs-lg); }
+.settle .settle-mode { margin-bottom: var(--sp-2); background: #fff; }
+.settle .settle-mode button { padding: 10px 6px; line-height: 1.2; }
 .settle .done { color: var(--pos); font-size: var(--fs-sm); padding: var(--sp-3) 0; }
 
 /* expenses */

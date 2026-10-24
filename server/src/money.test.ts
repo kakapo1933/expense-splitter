@@ -8,6 +8,7 @@ import {
   splitExact,
   balances,
   settle,
+  settleDirect,
 } from "./money.ts";
 
 const sum = (xs: { shareCents: number }[]) => xs.reduce((a, x) => a + x.shareCents, 0);
@@ -225,5 +226,72 @@ describe("settle", () => {
   test("all zero → empty", () => {
     assert.deepEqual(settle([{ memberId: "A", netCents: 0 }, { memberId: "B", netCents: 0 }]), []);
     assert.deepEqual(settle([]), []);
+  });
+});
+
+describe("settleDirect", () => {
+  const apply = (nets: Map<string, number>, ts: { fromId: string; toId: string; cents: number }[]) => {
+    for (const t of ts) {
+      nets.set(t.fromId, (nets.get(t.fromId) ?? 0) + t.cents);
+      nets.set(t.toId, (nets.get(t.toId) ?? 0) - t.cents);
+    }
+    return nets;
+  };
+  const total = (ts: { cents: number }[]) => ts.reduce((a, t) => a + t.cents, 0);
+
+  test("two expenses in opposite directions net into one transfer", () => {
+    const members = ["A", "B"];
+    const t = settleDirect(
+      [
+        { payerId: "A", amountCents: 100, splits: [{ memberId: "B", shareCents: 100 }] },
+        { payerId: "B", amountCents: 30, splits: [{ memberId: "A", shareCents: 30 }] },
+      ],
+      members,
+    );
+    assert.deepEqual(t, [{ fromId: "B", toId: "A", cents: 70 }]);
+  });
+
+  test("a member who only owes cindy pays cindy once; same total and zeroing as settle", () => {
+    const members = ["me", "pig", "cindy", "ami", "kaka", "guest"];
+    const expenses = [
+      // cindy paid 2400 split six ways → everyone else owes cindy 400
+      { payerId: "cindy", amountCents: 240000, splits: splitEqual(240000, members) },
+      // cross debts so greedy would reroute kaka's payment elsewhere
+      { payerId: "me", amountCents: 90000, splits: splitEqual(90000, ["me", "pig", "ami"]) },
+      { payerId: "pig", amountCents: 60000, splits: splitEqual(60000, ["me", "pig", "cindy", "ami"]) },
+    ];
+    const direct = settleDirect(expenses, members);
+    const kaka = direct.filter((t) => t.fromId === "kaka" || t.toId === "kaka");
+    assert.deepEqual(kaka, [{ fromId: "kaka", toId: "cindy", cents: 40000 }]);
+    const guest = direct.filter((t) => t.fromId === "guest" || t.toId === "guest");
+    assert.deepEqual(guest, [{ fromId: "guest", toId: "cindy", cents: 40000 }]);
+
+    const bals = balances(expenses, members);
+    const greedy = settle(bals);
+    // Greedy's total equals Σ positive nets, the lower bound of any plan; direct routes
+    // through intermediaries (A→B, B→C instead of A→C), so its total is ≥, not equal.
+    assert.equal(total(greedy), bals.filter((b) => b.netCents > 0).reduce((a, b) => a + b.netCents, 0));
+    assert.ok(total(direct) >= total(greedy));
+    for (const plan of [direct, greedy]) {
+      const nets = apply(new Map(bals.map((b) => [b.memberId, b.netCents])), plan);
+      for (const [, n] of nets) assert.equal(n, 0);
+    }
+    // sorted: amount desc, ties by member order (from, then to)
+    for (let i = 1; i < direct.length; i++) {
+      const a = direct[i - 1]!;
+      const b = direct[i]!;
+      const ia = [members.indexOf(a.fromId), members.indexOf(a.toId)];
+      const ib = [members.indexOf(b.fromId), members.indexOf(b.toId)];
+      assert.ok(a.cents > b.cents || (a.cents === b.cents && (ia[0]! < ib[0]! || (ia[0] === ib[0] && ia[1]! < ib[1]!))));
+    }
+  });
+
+  test("no expenses → empty", () => {
+    assert.deepEqual(settleDirect([], ["A", "B"]), []);
+  });
+
+  test("payer's own share never produces a transfer", () => {
+    const t = settleDirect([{ payerId: "A", amountCents: 100, splits: [{ memberId: "A", shareCents: 100 }] }], ["A"]);
+    assert.deepEqual(t, []);
   });
 });

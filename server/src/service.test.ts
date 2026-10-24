@@ -45,6 +45,14 @@ describe("service: full lifecycle on an in-memory DB", () => {
     assert.equal(net(c.id), -3333);
     assert.equal(view.settlement.length, 2);
     assert.ok(view.settlement.every((t) => t.toId === a.id));
+    // direct mode is present and zeroes every balance too
+    assert.equal(view.settlementDirect.length, 2);
+    const after = new Map(view.balances.map((x) => [x.memberId, x.netCents]));
+    for (const t of view.settlementDirect) {
+      after.set(t.fromId, after.get(t.fromId)! + t.cents);
+      after.set(t.toId, after.get(t.toId)! - t.cents);
+    }
+    assert.ok([...after.values()].every((n) => n === 0));
 
     // edit → exact, with input values round-tripped
     const e2 = svc.updateExpense(g.id, e.id, {
@@ -75,6 +83,7 @@ describe("service: full lifecycle on an in-memory DB", () => {
     assert.deepEqual(view.expenses, []);
     assert.ok(view.balances.every((x) => x.netCents === 0 && x.paidCents === 0 && x.owedCents === 0));
     assert.deepEqual(view.settlement, []);
+    assert.deepEqual(view.settlementDirect, []);
   });
 
   it("percent split stores the typed percent and sums to the total", () => {

@@ -6,6 +6,7 @@ import {
   balances,
   parseAmount,
   settle,
+  settleDirect,
   splitEqual,
   splitExact,
   splitPercent,
@@ -49,6 +50,7 @@ export interface GroupView {
   expenses: ExpenseView[];
   balances: Balance[];
   settlement: Transfer[];
+  settlementDirect: Transfer[];
 }
 
 const now = () => new Date().toISOString();
@@ -218,8 +220,16 @@ export function createService(db: DatabaseSync) {
         (byExpense.get(expenseId) ?? byExpense.set(expenseId, []).get(expenseId)!).push(s);
       }
       const expenses = expenseRows.map((e) => ({ ...e, splits: byExpense.get(e.id) ?? [] }));
-      const bals = balances(expenses, members.map((m) => m.id));
-      return { group, members, expenses, balances: bals, settlement: settle(bals) };
+      const memberIds = members.map((m) => m.id);
+      const bals = balances(expenses, memberIds);
+      return {
+        group,
+        members,
+        expenses,
+        balances: bals,
+        settlement: settle(bals),
+        settlementDirect: settleDirect(expenses, memberIds),
+      };
     },
   };
 }

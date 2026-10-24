@@ -232,3 +232,34 @@ export function settle(bals: Pick<Balance, "memberId" | "netCents">[]): Transfer
   }
   return out;
 }
+
+/**
+ * "Pay who paid for you": for every expense and every split whose member ≠ payer,
+ * debt[member→payer] += share. Each unordered pair is netted (a→b − b→a) into one transfer
+ * for the positive side. More transfers than `settle`, but every transfer goes to someone
+ * who actually paid for you. Sorted by amount desc, ties by member order (from, then to).
+ */
+export function settleDirect(expenses: ExpenseLike[], memberIds: string[]): Transfer[] {
+  const order = new Map(memberIds.map((id, i) => [id, i]));
+  const rank = (id: string) => order.get(id) ?? Number.MAX_SAFE_INTEGER;
+  // Keyed by canonical pair "lo|hi" (member order); value = net owed from lo to hi (signed).
+  const net = new Map<string, number>();
+  for (const e of expenses) {
+    for (const s of e.splits) {
+      if (s.memberId === e.payerId || s.shareCents === 0) continue;
+      const loFirst = rank(s.memberId) <= rank(e.payerId);
+      const [lo, hi] = loFirst ? [s.memberId, e.payerId] : [e.payerId, s.memberId];
+      const key = `${lo}|${hi}`;
+      net.set(key, (net.get(key) ?? 0) + (loFirst ? s.shareCents : -s.shareCents));
+    }
+  }
+  const out: Transfer[] = [];
+  for (const [key, cents] of net) {
+    if (cents === 0) continue;
+    const [lo, hi] = key.split("|") as [string, string];
+    out.push(cents > 0 ? { fromId: lo, toId: hi, cents } : { fromId: hi, toId: lo, cents: -cents });
+  }
+  return out.sort(
+    (a, b) => b.cents - a.cents || rank(a.fromId) - rank(b.fromId) || rank(a.toId) - rank(b.toId),
+  );
+}
