@@ -49,6 +49,7 @@ input::placeholder { color: var(--muted); }
 
 /* ---- header ---- */
 .app-header { padding: max(var(--sp-3), env(safe-area-inset-top)) var(--sp-4) var(--sp-3); background: var(--bg); position: sticky; top: 0; z-index: 2; }
+.back { display: inline-flex; align-items: center; min-height: var(--tap); margin: -8px 0 -4px -6px; padding: 0 6px; color: var(--accent); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; }
 .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
 h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; letter-spacing: -.01em; line-height: 1.2; overflow-wrap: anywhere; }
 .sub { color: var(--muted); font-size: var(--fs-sm); margin: 2px 0 var(--sp-3); }

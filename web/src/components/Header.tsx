@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { GroupView } from "../api";
 import { isComposingEnter } from "../keys";
 import { formatCents } from "../money";
+import { navigate } from "../router";
 import type { LiveState } from "../useGroup";
 import { Avatar } from "./Avatar";
 
@@ -77,6 +78,17 @@ export function Header({ view, live, onAddMember, addSignal = 0 }: Props) {
 
   return (
     <header className="app-header">
+      <a
+        className="back"
+        href="/"
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // let the browser open a new tab
+          e.preventDefault();
+          navigate("/");
+        }}
+      >
+        ‹ Groups
+      </a>
       <div className="title-row">
         <h1>{view.group.name}</h1>
         <div className="hdr-right">
