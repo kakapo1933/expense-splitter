@@ -17,8 +17,9 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 - 資料撐過重啟（SQLite）。兩個瀏覽器互相看得到變更（SSE）。
 - settle-up 的每一筆可標記為已付（記錄成還款，可刪除）。
 - 成員可離開與重新加入；離開的成員保留歷史與餘額，但不再被預選。
+- 支出可用 20 種幣別之一，以鎖定匯率換算成群組的 base（見「幣別」）。
 
-範圍外（README 的「next steps」）：登入與權限、多幣別、soft delete + audit log、離線、
+範圍外（README 的「next steps」）：登入與權限、soft delete + audit log、離線、
 全域最少筆數的 settle 演算法。
 
 ## 技術棧
@@ -30,11 +31,11 @@ App 顯示每個人目前的餘額，以及一份用盡量少的轉帳把所有�
 
 ## 資料模型
 
-所有金額欄位一律存**整數分（cents）**。
+所有金額欄位一律存**整數最小單位**（USD 即為分；見「幣別」）。
 
 | 表               | 欄位                                                                                                        |
 |------------------|-------------------------------------------------------------------------------------------------------------|
-| `groups`         | id, name, currency（先固定 `USD`）, created_at                                                              |
+| `groups`         | id, name, currency（base，見「幣別」）, created_at                                                        |
 | `members`        | id, group_id, name, created_at, left_at（可空）— (group_id, name) 唯一；依 `rowid`（插入順序）排序           |
 | `expenses`       | id, group_id, payer_id, description, amount_cents, split_mode（`equal`/`exact`/`percent`）, created_at, updated_at |
 | `expense_splits` | expense_id, member_id, share_cents, input_value — PK (expense_id, member_id)                                |
@@ -133,6 +134,61 @@ id 一律 UUID v4（`crypto.randomUUID()`），群組 URL 不可猜。
 成員不能改名或刪除（刪了會讓它的 splits 失去歸屬）——列為範圍外。
 
 不做登入：知道群組 URL 就等於受邀。
+
+## 幣別
+
+前四個階段之後加入（紀錄見 `TODO-multi-currency.md`）。`money.ts` 除了多一個選填的 `decimals`
+參數外不變；以下所有東西都先換算成 base 再交給它。
+
+**資料模型。** 金額欄位存整數**最小單位**（minor unit）；每個幣別的 `decimals`（在
+`server/src/rates.ts`）表示幾個最小單位等於一個主單位——USD/EUR/… 為 2，TWD/JPY/KRW/VND/IDR 為 0。
+
+- `groups.currency`：群組的 base currency，建立時設定（預設 `USD`）。
+- `expenses.currency`、`expenses.original_cents`（實付金額，以該幣別最小單位計）、
+  `expenses.rate_nanos`（鎖定的匯率）與 `expenses.amount_cents`（換算後的 base 金額——分攤與餘額
+  用的就是它）。舊資料回填為 `currency = base, original_cents = amount_cents, rate_nanos = 10^9`。
+- `group_rates (group_id, currency, rate_nanos > 0, updated_at)`，PK `(group_id, currency)`：
+  群組自訂匯率。
+- 分攤與還款一律以 base 計。
+
+**匯率慣例。** 匯率是「1 單位外幣等於多少 base 單位」，以乘上 10^9 的整數儲存（`rate_nanos`），
+API 上以最多 9 位小數的十進位字串傳遞（`"0.216129032"`），不用浮點數。內建匯率表有 20 種幣別，
+各附一個近似的 `usdPerUnit`；內建的 X → Y 匯率經由 USD 推算。base 幣別的支出匯率固定為 10^9。
+
+**匯率決定順序**（新增或編輯支出時）：輸入中明確給的 `rate` > 群組自訂匯率 > 內建交叉匯率。
+決定後的匯率存在該筆支出上，之後不再回頭查表，所以後來改自訂匯率不會動到既有支出。
+
+**換算。** `base = round_half_up(orig × rate_nanos × 10^(baseDec − origDec) / 10^9)`，以 BigInt
+計算；結果必須 > 0（否則 `INVALID_AMOUNT`）且不超過金額上限。
+
+**指定金額（exact）模式。** 每人份額以支出的幣別輸入，總和必須等於原幣金額
+（否則 `EXACT_SUM_MISMATCH`）。每份以同一匯率換算後無條件捨去，與 `amount_cents` 的差額依
+最大餘數一次一單位補上（同餘數依成員順序），因此 Σ share_cents = amount_cents。平分與百分比
+照舊在 base 上分 `amount_cents`。
+
+**更改 base。** 只有群組還沒有任何支出時才允許；否則 409 `GROUP_NOT_EMPTY`。之後再改就得重新
+換算歷史資料——不在範圍內。
+
+**API 新增。**
+
+```
+POST   /api/groups                        { name, currency? }      → 201 group
+PATCH  /api/groups/:id                    { currency }             → 200 group · 409 GROUP_NOT_EMPTY
+PUT    /api/groups/:id/rates/:currency    { rate }                 → 200 rates block
+DELETE /api/groups/:id/rates/:currency                             → 204 · 沒有自訂匯率時 404
+```
+
+- `ExpenseInput` 新增 `currency?`（預設 base）與 `rate?`（預設自訂匯率，其次內建）。`amount`
+  與 exact 的 `shares[].amount` 以 `currency` 計，小數位數不得超過其 `decimals`。base 幣別的
+  支出帶 `rate` → 400 `INVALID_RATE`；替 base 本身設自訂匯率 → 400 `INVALID_RATE`。
+- 錯誤碼：`UNKNOWN_CURRENCY`（400）、`INVALID_RATE`（400）、`GROUP_NOT_EMPTY`（409）。
+- View：每筆支出多 `currency`、`originalCents`、`rate`；頂層多
+  `rates: { base, table: { currency, name, decimals, rate, source: "seed" | "override" }[] }`
+  （每個非 base 幣別一列）。
+
+**前端。** 建立頁可選 base；支出表單有幣別選單、可編輯的匯率列與 `≈` base 總額；從 header 的
+base 標籤開啟換算器（Converter）bottom sheet，含匯率表與自訂匯率；settle 卡片有只供顯示的
+「show in …」選單——Mark paid 仍記錄 base 金額。
 
 ## 前端
 

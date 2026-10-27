@@ -21,7 +21,7 @@ pnpm dev        # server on :3000, web on :5173 (proxies /api) → open http://l
 ```
 
 ```bash
-pnpm test       # 42 tests: money logic + service layer on an in-memory DB
+pnpm test       # 62 tests: money logic, rates, service layer on an in-memory DB
 pnpm build      # web → web/dist, server → server/dist
 pnpm start      # production: one process on :3000 serving the API and the built SPA
 ```
@@ -44,8 +44,11 @@ share the group link from there.
 
 ## Design decisions
 
-**All money is integer cents.** Amounts arrive as decimal strings (`"12.34"`), are parsed with
-string arithmetic, and never touch a float. The web app only formats cents for display.
+**All money is integer minor units of the group's base currency.** Each currency has its own
+`decimals` (USD 2, TWD/JPY/KRW/VND/IDR 0), so a minor unit is a cent for USD and a whole yen for
+JPY. Amounts arrive as decimal strings (`"12.34"`), are parsed with string arithmetic against that
+currency's decimals (TWD `"12.5"` is rejected), and never touch a float. The web app only formats
+minor units for display.
 
 **Splitting is one pure module — [`server/src/money.ts`](server/src/money.ts).** No DB, no HTTP,
 fully unit-tested, and the only place that knows the rounding rules:
@@ -95,14 +98,43 @@ the default participants and default payer, move under a "Left" heading, stay in
 the plan until they are at zero, and can rejoin. (Added after the first real group: a late joiner
 kept being pre-selected into dinners they were not at.)
 
+**Multi-currency: one base per group, a currency per expense.**
+
+- *One base currency per group*, chosen at creation (default USD). Splits, balances, the settle
+  plan and payments are all in base, so `money.ts` did not change beyond an optional `decimals`.
+- *Each expense keeps what was paid and the rate it was converted at*: `currency`,
+  `original_cents`, `rate_nanos`, and `amount_cents` in base. The rate is locked on the row
+  rather than looked up on read — derived balances would otherwise drift every time the table
+  changed, and users want to type the rate from their card statement anyway, so it is editable
+  per expense.
+- *Rates are integers scaled by 10^9* (base units per 1 unit of the foreign currency). Conversion
+  is `orig × rate × 10^(baseDec − origDec) / 10^9` in BigInt, half-up to the base minor unit.
+  10^6 was the first draft; KRW→USD is 0.00072, which keeps only three significant digits at that
+  scale.
+- *A seeded table, overridable per group.* [`server/src/rates.ts`](server/src/rates.ts) ships 20
+  currencies with approximate USD rates; cross rates go through USD. Seeds are a starting point,
+  not a feed. A group can set its own rate per currency (`group_rates`). A new expense resolves its
+  rate as explicit `rate` > group override > seeded.
+- *Exact shares are typed in the paid currency* and must sum to the original amount there. Each
+  share is then converted at the expense's rate and the rounding residual is handed out by largest
+  remainder, so Σ shares equals `amount_cents` exactly.
+- *Settling stays in base.* The settle card's "show in" select converts the plan for display only
+  (`≈` prefix); Mark paid still records the base amount.
+- *The base is changeable only while the group has no expenses* (409 `GROUP_NOT_EMPTY`). After
+  that, changing it would mean re-converting every expense and re-splitting its shares — the same
+  history-rewrite problem as changing precision, so it is left for later (below).
+
 **No accounts.** Knowing the group URL (a UUID v4) is the invite. Fine for a trip with friends;
 a non-goal for this exercise.
 
 ## API
 
 ```
-POST   /api/groups                    { name }                → 201 group
+POST   /api/groups                    { name, currency? }     → 201 group · base default USD
+PATCH  /api/groups/:id                { currency }            → 200 group · 409 GROUP_NOT_EMPTY
 GET    /api/groups/:id                                         → view (see above)
+PUT    /api/groups/:id/rates/:currency { rate }               → 200 rates block (override)
+DELETE /api/groups/:id/rates/:currency                         → 204 (back to seeded)
 POST   /api/groups/:id/members        { name }                → 201 member · 409 if name exists
 POST   /api/groups/:id/expenses       ExpenseInput            → 201 expense
 PUT    /api/groups/:id/expenses/:eid  ExpenseInput            → 200 expense
@@ -116,17 +148,25 @@ GET    /api/groups/:id/events         text/event-stream: `hello`, then `changed`
 ```ts
 ExpenseInput = {
   description: string;            // 1–200 chars
-  amount: string;                 // "12.34", > 0, ≤ 10,000,000.00
+  amount: string;                 // in `currency`, at most its decimals; > 0
+  currency?: string;              // as paid; default = group base
+  rate?: string;                  // base per 1 unit, ≤ 9 decimals; default override, then seeded
+                                  // (INVALID_RATE when currency = base)
   payerId: string;
   split:
     | { mode: "equal";   memberIds: string[] }
-    | { mode: "exact";   shares: { memberId: string; amount:  string }[] }
+    | { mode: "exact";   shares: { memberId: string; amount:  string }[] }  // in `currency`
     | { mode: "percent"; shares: { memberId: string; percent: string }[] };
 }
 ```
 
+The view's expenses also carry `currency`, `originalCents` and the locked `rate`, and the view
+has a `rates` block: `{ base, table }` with one row per other currency (`currency`, `name`,
+`decimals`, `rate`, `source: "seed" | "override"`).
+
 Errors are `400 { error, message | issues }` (`VALIDATION`, `PERCENT_SUM_MISMATCH`,
-`EXACT_SUM_MISMATCH`, `UNKNOWN_MEMBER`, `DUPLICATE_MEMBER`, …), `404`, `409`.
+`EXACT_SUM_MISMATCH`, `UNKNOWN_MEMBER`, `DUPLICATE_MEMBER`, `UNKNOWN_CURRENCY`, `INVALID_RATE`, …),
+`404`, `409` (`DUPLICATE_NAME`, `GROUP_NOT_EMPTY`).
 
 ## Frontend
 
@@ -141,6 +181,13 @@ No accounts, so the group URL is the invite: the header has a **Share** button (
 on phones, clipboard elsewhere) and a link back to `/`, which lists the groups this browser has
 opened (localStorage — it does not follow you across devices; that is what sign-in would add).
 
+Currencies: the create page picks the base. In the expense sheet a currency select sits beside
+the amount (last used remembered per group), with a rate line — `1 JPY = 0.216129032 TWD · SEED`
+— that can be edited inline or reset, and a `≈ NT$648` converted total; previews and shares are in
+base. The base-currency badge in the header opens a **Converter** bottom sheet: amount + from/to,
+a "1 TWD =" glance list, and the group's rate table with editable overrides. The settle card has a
+display-only "show in …" select.
+
 The design was researched before it was built — see [`docs/design/research.md`](docs/design/research.md)
 for the conventions borrowed from Splitwise / Tricount / Settle Up and the ones deliberately dropped,
 and [`docs/design/mockup.html`](docs/design/mockup.html) for the static mockup the UI follows.
@@ -149,15 +196,17 @@ and [`docs/design/mockup.html`](docs/design/mockup.html) for the static mockup t
 
 ```
 server/src/money.ts        pure split / balance / settle logic (+ money.test.ts)
+server/src/rates.ts        currency table, seeded cross rates, BigInt conversion (+ rates.test.ts)
 server/src/db.ts           node:sqlite schema, WAL, foreign keys
 server/src/service.ts      transactions, group checks, view assembly (+ service.test.ts)
 server/src/routes.ts       Hono routes + zod validation + SSE
 server/src/events.ts       per-group subscriber set
 web/src/useGroup.ts        fetch + EventSource → refetch
 web/src/recent.ts          recently opened groups (localStorage)
-web/src/components/        Header · SettleCard · BalancesCard · ExpenseList · PaymentsList · ExpenseSheet
+web/src/components/        Header · SettleCard · BalancesCard · ExpenseList · PaymentsList · ExpenseSheet · Converter
 docs/SPEC.md               the spec the code was written against
 docs/TODO.md               phase-by-phase log with what was verified and what was caught
+docs/TODO-multi-currency.md the same log for the multi-currency round
 ```
 
 ## How it was built
@@ -170,18 +219,18 @@ afterwards added the IME fix (Enter during Chinese composition was adding member
 payer/split controls, the "pay who paid for you" settlement mode, share link and recent groups,
 "mark paid" settlements and members leaving.
 All of it is recorded in [`docs/TODO.md`](docs/TODO.md) with the failing input or observation and
-the spec change that followed.
+the spec change that followed. Multi-currency was added as a fifth round with its own phase log in
+[`docs/TODO-multi-currency.md`](docs/TODO-multi-currency.md), again with a lead session reviewing
+each phase built by an implementation session.
 
 ## What I'd do next
 
 1. **Soft delete + audit log** instead of hard delete, so a group can see who changed what.
-2. **Currency and precision per group.** `currency` is already a column; the missing piece is a
-   per-group `decimals` (TWD/JPY 0, most 2, BHD 3). Everything in `money.ts` is integer arithmetic
-   on the minor unit, so only `parseAmount` and the display formatter hard-code 2 — set at group
-   creation, it is a small change; changeable later, it means re-splitting history from the stored
-   `input_value`, which `exact` inputs with too many decimals cannot survive. (Asked for by the first
-   real users: with 0 decimals `$100 / 3` reads 34 / 33 / 33 and the odd cent question disappears.)
-3. **Optimistic UI** on save (today every write waits for the server and the SSE refetch).
-4. **Rate limiting / shareable-link expiry** if this ever left a friends-only context.
-5. **Remember participants per expense** — after someone leaves or a sub-group keeps eating
+2. **Live rates.** Fetch current rates into the seeded table on demand; the schema does not
+   change, since every expense already locks its own rate.
+3. **Change the base currency after expenses exist** by re-converting history from
+   `original_cents` and `rate_nanos` (and re-splitting exact shares from `input_value`).
+4. **Optimistic UI** on save (today every write waits for the server and the SSE refetch).
+5. **Rate limiting / shareable-link expiry** if this ever left a friends-only context.
+6. **Remember participants per expense** — after someone leaves or a sub-group keeps eating
    together, pre-select the last used set instead of "everyone active".

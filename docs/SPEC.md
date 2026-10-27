@@ -18,8 +18,9 @@ people using the app in different browsers see each other's changes.
 - Data survives restart (SQLite). Two browsers see each other's changes (SSE).
 - Settle-up rows can be marked as paid (recorded settlements, deletable).
 - A member can leave and rejoin; a left member keeps history and balances but is no longer pre-selected.
+- Expenses in any of 20 currencies, converted to the group's base at a locked rate (see Currency).
 
-Out of scope (README "next steps"): auth/permissions, multi-currency, soft delete + audit log,
+Out of scope (README "next steps"): auth/permissions, soft delete + audit log,
 offline, globally-minimal settlement.
 
 ## Stack
@@ -31,11 +32,11 @@ offline, globally-minimal settlement.
 
 ## Data model
 
-All money columns are **integer cents**.
+All money columns are **integer minor units** (cents for USD; see Currency).
 
 | Table            | Columns                                                                                                     |
 |------------------|-------------------------------------------------------------------------------------------------------------|
-| `groups`         | id, name, currency (fixed `USD` for now), created_at                                                        |
+| `groups`         | id, name, currency (base, see Currency), created_at                                                        |
 | `members`        | id, group_id, name, created_at, left_at (nullable) — unique (group_id, name); ordered by `rowid` (insertion order) |
 | `expenses`       | id, group_id, payer_id, description, amount_cents, split_mode (`equal`/`exact`/`percent`), created_at, updated_at |
 | `expense_splits` | expense_id, member_id, share_cents, input_value — PK (expense_id, member_id)                                |
@@ -143,6 +144,66 @@ Ids are UUID v4 (`crypto.randomUUID()`), so group URLs are not guessable.
 Members cannot be renamed or deleted (deleting one would orphan its splits) — out of scope.
 
 No auth: knowing the group URL is the invite.
+
+## Currency
+
+Added after the first four phases (log: `TODO-multi-currency.md`). `money.ts` is unchanged apart
+from an optional `decimals` argument; everything below converts into base before it runs.
+
+**Data model.** Money columns hold integer **minor units**; each currency's `decimals` (in
+`server/src/rates.ts`) says how many make one major unit — USD/EUR/… 2, TWD/JPY/KRW/VND/IDR 0.
+
+- `groups.currency`: the base currency, set on create (default `USD`).
+- `expenses.currency`, `expenses.original_cents` (amount as paid, in that currency's minor units),
+  `expenses.rate_nanos` (locked rate) and `expenses.amount_cents` (converted, in base — what
+  splits and balances use). Old rows are backfilled `currency = base, original_cents =
+  amount_cents, rate_nanos = 10^9`.
+- `group_rates (group_id, currency, rate_nanos > 0, updated_at)`, PK `(group_id, currency)`:
+  per-group overrides.
+- Splits and settlements are in base.
+
+**Rate convention.** A rate is "base units per 1 unit of the foreign currency", stored as an
+integer scaled by 10^9 (`rate_nanos`) and sent over the API as a decimal string with up to 9
+decimals (`"0.216129032"`). Never a float. The seeded table has 20 currencies with an approximate
+`usdPerUnit`; a seeded pair X → Y is derived through USD. A base-currency expense is always at
+exactly 10^9.
+
+**Resolution order** for a new or edited expense: explicit `rate` in the input > group override >
+seeded cross rate. The resolved rate is stored on the row and never re-read from the table, so
+later overrides do not move existing expenses.
+
+**Conversion.** `base = round_half_up(orig × rate_nanos × 10^(baseDec − origDec) / 10^9)` in
+BigInt; the result must be > 0 (`INVALID_AMOUNT` otherwise) and ≤ the max amount.
+
+**Exact mode.** Shares are typed in the expense's currency and must sum to the original amount
+there (`EXACT_SUM_MISMATCH`). Each share is converted with the same rate, floored, and the residual
+up to `amount_cents` goes one unit at a time by largest remainder (ties → member order), so
+Σ share_cents = amount_cents. Equal and percent split `amount_cents` in base as before.
+
+**Base change.** Allowed only while the group has no expenses; otherwise 409 `GROUP_NOT_EMPTY`.
+Changing it later would mean re-converting history — out of scope.
+
+**API additions.**
+
+```
+POST   /api/groups                        { name, currency? }      → 201 group
+PATCH  /api/groups/:id                    { currency }             → 200 group · 409 GROUP_NOT_EMPTY
+PUT    /api/groups/:id/rates/:currency    { rate }                 → 200 rates block
+DELETE /api/groups/:id/rates/:currency                             → 204 · 404 if no override
+```
+
+- `ExpenseInput` gains `currency?` (default base) and `rate?` (default override, then seeded).
+  `amount` and exact `shares[].amount` are in `currency`, limited to its `decimals`. A `rate` on a
+  base-currency expense → 400 `INVALID_RATE`. Setting an override for the base itself → 400
+  `INVALID_RATE`.
+- Errors: `UNKNOWN_CURRENCY` (400), `INVALID_RATE` (400), `GROUP_NOT_EMPTY` (409).
+- View: each expense adds `currency`, `originalCents`, `rate`; top level adds
+  `rates: { base, table: { currency, name, decimals, rate, source: "seed" | "override" }[] }`
+  (one row per non-base currency).
+
+**Frontend.** Base select on the create page; currency select + editable rate line + `≈` base total
+in the expense sheet; a Converter bottom sheet (from the header's base badge) with the rate table
+and overrides; a display-only "show in …" select on the settle card — Mark paid still records base.
 
 ## Frontend
 
