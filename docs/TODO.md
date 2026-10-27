@@ -74,4 +74,4 @@
 
 
 ## 8. 新功能：多幣別
-- [ ] 依 `TODO-multi-currency.md` 分五段實作，每段驗證後回填該檔
+- [x] 依 `TODO-multi-currency.md` 分五段實作（lead 做 rates 模組，其餘三段各開一條實作 session），每段由 lead 獨立驗證後回填該檔；六個 commit 71a8ae0 → bb83526

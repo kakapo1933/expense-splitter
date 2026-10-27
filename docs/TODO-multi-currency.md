@@ -92,8 +92,21 @@ balances and settlement keep running on integer minor units of the base currency
 - Nit (not blocking): the converter amount field opens prefilled with 1000, so typing appends
   unless the field is cleared first. Candidate for the docs/polish pass.
 
-## 5. Docs
-- [ ] README: design decisions (base currency, locked rate, integer rates), API section, next
-      steps (live rates, base change with re-conversion)
-- [ ] `SPEC.md` / `SPEC.zh-TW.md`: currency section
-- [ ] Tick this file with commits and verification notes
+## 5. Docs — session mc-docs (Opus 5.5, medium effort)
+- [x] README: multi-currency design-decisions block, API section (new endpoints, `ExpenseInput`
+      fields, error codes, `rates` view block), frontend paragraph, project layout, test count 62,
+      next steps now "Live rates" and "Change base by re-converting history"
+- [x] `SPEC.md` / `SPEC.zh-TW.md`: Currency section (data model, rate convention, resolution
+      order, conversion, exact mode, base change, API additions, frontend)
+- [x] Converter amount opens empty with placeholder 0 (nit from phase 4)
+- [x] This file ticked per phase by the lead
+- Verify: ✅ commits 736ebe6 (converter) + bb83526 (docs). Lead read the README block and SPEC
+  section against `service.ts` / `rates.ts` / `routes.ts`: every claim matches, including the
+  zero-conversion guard (`INVALID_AMOUNT` at service.ts:266) and the 404 on deleting a missing
+  override. Browser: converter opens empty, result shows "—", rate table visible. Final run:
+  `pnpm test` 62/62, server + web `tsc --noEmit` clean, `pnpm build` ok.
+
+## Done
+
+Five phases, six commits on `main` (71a8ae0 → bb83526 plus the doc ticks). Not in scope and left as
+README next steps: live rates, changing the base after expenses exist. Evidence: `docs/evidence/mc-*.jpg`.
