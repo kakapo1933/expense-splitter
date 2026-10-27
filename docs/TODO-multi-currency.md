@@ -69,20 +69,28 @@ balances and settlement keep running on integer minor units of the base currency
   `INVALID_AMOUNT`; XXX → 400 `UNKNOWN_CURRENCY`; rate on base → 400 `INVALID_RATE`; PATCH base →
   409; balances +654 / −654 match by hand (Ann paid 1308, owes 654).
 
-## 4. Web
-- [ ] `web/src/money.ts`: `formatMoney(minor, currency)` with per-currency decimals and symbol;
-      `parseMinor(input, decimals)`; `formatCents` callers migrate to it
-- [ ] Create-group page: base currency select
-- [ ] Expense sheet: currency select beside amount; when ≠ base, a rate line
-      "1 TWD = 0.0312 USD · ≈ $37.44" with an editable rate; preview and shares in base currency
-- [ ] Expense list: original amount, with a small base-currency line when they differ
-- [ ] Header: base currency badge; opens the **Converter** panel
-- [ ] Converter panel: amount + from + to, uses the group's table (override first); a row per
-      other currency so "how much is this in X" is one glance; link to edit overrides
-- [ ] Settle card: optional "show in …" select, display-only
-- Verify (Browser pane, 375 px): create a TWD group → add USD expense at seeded rate → balances in
-  TWD → override USD rate → new expense picks it up, old one unchanged → edit old expense's rate →
-  converter TWD→JPY matches hand calculation → no horizontal scroll. Screenshots in `docs/evidence/`
+## 4. Web — session mc-web (Opus 5.5, medium effort)
+- [x] `web/src/money.ts`: `formatMoney` / `formatSigned` / `parseMinor` / `minorToDecimal` with
+      per-currency decimals and symbols (`NT$`, `¥`, `€`, `£`, else `CODE `); `convertPreview`
+      mirrors the server's half-up BigInt conversion; every `formatCents` caller migrated
+- [x] Create-group page: base currency select (default USD)
+- [x] Expense sheet: currency select beside the amount (last used remembered per group); rate line
+      "1 JPY = 0.216129032 TWD · SEED / OVERRIDE / LOCKED" with inline edit and reset link; "≈ NT$648"
+      converted total; previews and shares in base; edit prefills currency, original and locked rate
+- [x] Expense list: original amount with "≈ NT$648 @ 0.2161" line; header total in base
+- [x] Header: base-currency badge opens the Converter bottom sheet
+- [x] Converter: amount + from/to + swap, "1 TWD =" list for every currency, Rates section with
+      editable overrides (Enter/blur = PUT, "Reset to seed" = DELETE), live via SSE
+- [x] Settle card: "show in …" select, display-only (≈ prefix); Mark paid still sends base
+- Verify: ✅ commit 9db9455; session's 6 screenshots in `docs/evidence/mc-*.jpg`. Lead's own
+  Browser-pane walkthrough at 375 px on a fresh TWD group: JPY 3000 → sheet shows seed rate,
+  ≈ NT$648, shares 324/324; list "¥3,000 ≈ NT$648 @ 0.2161"; converter 1 TWD = 4.62687 JPY
+  (= 0.031/0.0067); set JPY override 0.22 → converter refreshes to 4.54545 and row shows
+  "Reset to seed"; new JPY 1000 → 220 while Ramen stays 648, balance 214 = 324 − 110; edit Ramen
+  rate to 0.22 → 660, balance 220; settle "show in JPY" → ≈ ¥1,000 (220/0.22);
+  `scrollWidth === innerWidth === 375`; `pnpm build` ok, `web tsc --noEmit` clean, 62/62 tests.
+- Nit (not blocking): the converter amount field opens prefilled with 1000, so typing appends
+  unless the field is cleared first. Candidate for the docs/polish pass.
 
 ## 5. Docs
 - [ ] README: design decisions (base currency, locked rate, integer rates), API section, next
