@@ -43,30 +43,31 @@ balances and settlement keep running on integer minor units of the base currency
   `tsc --noEmit` clean. Caught while writing: a first test expected $10M→TWD to overflow; it is
   only 322M TWD, under the cap — switched to KRW. Also a TDZ bug (regex declared after the table).
 
-## 2. DB — schema and additive migrations (`server/src/db.ts`)
-- [ ] `groups.currency` is now honoured (was hard-coded `'USD'` on insert)
-- [ ] `expenses` + `currency TEXT`, `original_cents INTEGER`, `rate_micros INTEGER`
-      — migration backfills `currency = group.currency`, `original_cents = amount_cents`,
-      `rate_micros = 1_000_000` so every old expense reads as "paid in base at rate 1"
-- [ ] new table `group_rates (group_id, currency, rate_micros, updated_at)` — override of the
-      rate from `currency` to the group's base; PK `(group_id, currency)`
-- Verify: open a copy of `server/data/app.db`, confirm columns and backfilled values, old
-  groups return the same balances as before
+## 2. DB — schema and additive migrations (`server/src/db.ts`) — session mc-server
+- [x] `groups.currency` honoured on insert (was hard-coded `'USD'`)
+- [x] `expenses` + `currency`, `original_cents`, `rate_nanos` via `COLUMN_MIGRATIONS`; idempotent
+      SQL backfill `currency = group base, original_cents = amount_cents, rate_nanos = 10^9`
+- [x] `group_rates (group_id, currency, rate_nanos > 0, updated_at)`, PK `(group_id, currency)`
+- Verify: ✅ in commit e0955b4; migration test opens an old-shape in-memory DB, inserts, migrates,
+  checks the backfill. Lead re-ran `pnpm test` 62/62 and `tsc --noEmit` clean.
 
-## 3. Service + API (`service.ts`, `schemas.ts`, `routes.ts`)
-- [ ] `POST /api/groups { name, currency? }` — validates against `CURRENCIES`
-- [ ] `PATCH /api/groups/:id { currency }` — 409 `GROUP_NOT_EMPTY` once expenses exist
-- [ ] `ExpenseInput` + `currency?` (default base) and `rate?` (decimal string; default from
-      override, then seeded cross rate). Service converts, stores all three, splits the base amount
-- [ ] `PUT /api/groups/:id/rates/:currency { rate }` and `DELETE` to drop the override
-- [ ] `GET /api/groups/:id` view adds `rates: { base, table: [{ currency, decimals,
-      rateMicros, source: "seed" | "override" }] }` and each expense carries `currency`,
-      `originalCents`, `rateMicros`
-- [ ] Errors: `UNKNOWN_CURRENCY`, `INVALID_RATE`, `GROUP_NOT_EMPTY`
-- [ ] Service tests: expense in TWD on a USD group converts and splits in USD; override changes the
-      default rate for new expenses but not existing ones; edit with a new rate re-converts;
-      base change rejected when expenses exist
-- Verify: `pnpm test` green; curl pass for every new endpoint including each 4xx
+## 3. Service + API (`service.ts`, `schemas.ts`, `routes.ts`, `errors.ts`, `index.ts`) — session mc-server
+- [x] `POST /api/groups { name, currency? }`; `PATCH /api/groups/:id { currency }` → 409
+      `GROUP_NOT_EMPTY` once expenses exist
+- [x] `ExpenseInput` + `currency?`, `rate?`; rate resolution explicit > override > seeded; a
+      base-currency expense cannot carry a rate (`INVALID_RATE`); `amount_cents` = converted base
+- [x] Exact shares are typed in the original currency; each converted, residual by largest
+      remainder so Σ share == amount_cents
+- [x] `PUT /api/groups/:id/rates/:currency { rate }` → rates block; `DELETE` → 204
+- [x] View: expenses carry `currency`, `originalCents`, `rate`; `rates: { base, table[19] }`
+      with `source: "seed" | "override"`
+- [x] Errors `UNKNOWN_CURRENCY`, `INVALID_RATE` (400), `GROUP_NOT_EMPTY` (409) mapped in `index.ts`
+- [x] 10 new service tests (62 total)
+- Verify: ✅ commit e0955b4. Lead's independent curl pass on a throwaway DB (TWD group):
+  JPY 3000 at seeded 0.216129032 → 648 TWD split 324/324; override JPY 0.22 → next JPY 1000 → 220,
+  the earlier expense unchanged; exact 1000 + 2000 JPY → 220 + 440 = 660; TWD "12.5" → 400
+  `INVALID_AMOUNT`; XXX → 400 `UNKNOWN_CURRENCY`; rate on base → 400 `INVALID_RATE`; PATCH base →
+  409; balances +654 / −654 match by hand (Ann paid 1308, owes 654).
 
 ## 4. Web
 - [ ] `web/src/money.ts`: `formatMoney(minor, currency)` with per-currency decimals and symbol;
