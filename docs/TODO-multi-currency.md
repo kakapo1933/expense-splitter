@@ -15,25 +15,33 @@ balances and settlement keep running on integer minor units of the base currency
 - **Per-expense currency with a locked rate.** An expense stores the original amount and
   currency as paid, the rate used, and the converted base amount. The rate is frozen on the row
   so balances never drift when the table changes; the user may edit the rate on the expense.
-- **Rates are stored as an integer scaled by 10^6** (`rate_micros`), never a float.
-  Conversion: `base_minor = round(orig_minor × rate_micros / 10^6)`, adjusted for the two
-  currencies' decimals. Rounding is half-up to the base currency's minor unit.
+- **Rates are stored as an integer scaled by 10^9** (`rate_nanos`), never a float. 10^6 was the
+  first draft; KRW→USD (0.00072) would have kept only three significant digits. Conversion:
+  `base_minor = round(orig_minor × rate_nanos × 10^(baseDec − origDec) / 10^9)` with BigInt,
+  half-up to the base currency's minor unit.
 - **Seeded table** of ~20 common currencies with decimals (TWD, JPY, KRW 0; most 2) and a fixed
   rate to USD. Cross rates go through USD. Seed values are a starting point, not a live feed.
 - **Group overrides** replace the seeded rate for a pair; new expenses default to the override.
 - **Settlements stay in base currency.** The converter shows a transfer in another currency for
   display only; what gets recorded is the base amount.
 - Out of scope: live rate API, changing the base after expenses exist, per-group rounding mode.
+- **Workflow:** this file is kept by the lead session. Each phase from 2 on runs in its own
+  implementation session in this checkout (no worktree, so phases see each other's code), commits
+  its own work, and does not edit `docs/`; the lead re-verifies and ticks here.
 
-## 1. Server — rates module (`server/src/rates.ts` + `rates.test.ts`)
-- [ ] `CURRENCIES`: code, name, decimals, seeded `usdRateMicros`
-- [ ] `convert(amountMinor, from, to, rateMicros)` — integer-only, half-up rounding to `to.decimals`
-- [ ] `crossRateMicros(from, to, table)` — derived through USD, integer arithmetic
-- [ ] `parseAmount` becomes decimals-aware: `"1200"` valid for TWD, `"12.345"` rejected for USD
-- [ ] Tests: USD→TWD / TWD→USD round trip within 1 minor unit; JPY (0 decimals) rounding;
-      identity rate = 1_000_000 returns the same amount; rate 0 or negative rejected;
-      overflow guard on `MAX_AMOUNT`
-- Verify: `pnpm test` green; hand-check three conversions against the seeded table
+## 1. Server — rates module (`server/src/rates.ts` + `rates.test.ts`) — lead session
+- [x] `CURRENCIES`: 20 codes with name, decimals (JPY/TWD/KRW/VND/IDR 0), seeded `usdPerUnit`
+- [x] `convert(amountMinor, from, to, rate)` — BigInt, half-up to `to.decimals`, MAX guard
+- [x] `seededRate(from, to)` — derived through USD; identity pair is exactly 10^9
+- [x] `parseRate` / `formatRate` — up to 9 decimals, string arithmetic; `CurrencyError`
+      (`UNKNOWN_CURRENCY`, `INVALID_RATE`, status 400)
+- [x] `parseAmount(s, decimals = 2)` and `splitExact(…, decimals)` in `money.ts`; default keeps
+      every existing caller and all 42 old tests unchanged
+- [x] 10 tests: parse/format, table sanity, cross rate USD↔TWD / JPY→TWD, identity, $37.44→1208 TWD,
+      1200 TWD→$37.20, half-up at 0 and 2 decimals, round trip ≤ 1 TWD, rate ≤ 0 and overflow rejected
+- Verify: ✅ commit 1938b3f (amended to exclude an unrelated untracked doc); `pnpm test` 52/52,
+  `tsc --noEmit` clean. Caught while writing: a first test expected $10M→TWD to overflow; it is
+  only 322M TWD, under the cap — switched to KRW. Also a TDZ bug (regex declared after the table).
 
 ## 2. DB — schema and additive migrations (`server/src/db.ts`)
 - [ ] `groups.currency` is now honoured (was hard-coded `'USD'` on insert)
