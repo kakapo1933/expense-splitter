@@ -19,7 +19,7 @@ export function BalancesCard({ view }: { view: GroupView }) {
           {m.name}
           {m.leftAt && <span className="tag">left</span>}
         </span>
-        <span className={`pill amt ${cls}`}>{net === 0 ? word : `${formatSigned(net)} ${word}`}</span>
+        <span className={`pill amt ${cls}`}>{net === 0 ? word : `${formatSigned(net, view.group.currency)} ${word}`}</span>
       </div>
     );
   };

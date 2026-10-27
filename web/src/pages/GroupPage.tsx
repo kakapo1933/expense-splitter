@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Expense, type ExpenseInput, type Settlement, type Transfer } from "../api";
 import { BalancesCard } from "../components/BalancesCard";
 import { ExpenseList } from "../components/ExpenseList";
+import { Converter } from "../components/Converter";
 import { ExpenseSheet } from "../components/ExpenseSheet";
 import { Header } from "../components/Header";
 import { PaymentsList } from "../components/PaymentsList";
 import { SettleCard } from "../components/SettleCard";
 import { forgetGroup, recordVisit } from "../recent";
 import { navigate } from "../router";
-import { centsToDecimal } from "../money";
+import { decimalsOf, minorToDecimal } from "../money";
 import { useGroup } from "../useGroup";
 
 type Sheet = { open: false } | { open: true; expense?: Expense };
@@ -17,6 +18,8 @@ export function GroupPage({ id }: { id: string }) {
   const { view, error, notFound, live, refetch } = useGroup(id);
   const [sheet, setSheet] = useState<Sheet>({ open: false });
   const [addMemberSignal, setAddMemberSignal] = useState(0);
+  const [converterOpen, setConverterOpen] = useState(false);
+  const closeConverter = useCallback(() => setConverterOpen(false), []);
 
   const closeSheet = useCallback(() => setSheet({ open: false }), []);
 
@@ -56,10 +59,12 @@ export function GroupPage({ id }: { id: string }) {
   // "Mark paid" records a payment for exactly that plan row; the plan is recomputed server-side.
   const markPaid = useCallback(
     async (t: Transfer) => {
-      await api.createSettlement(id, { fromId: t.fromId, toId: t.toId, amount: centsToDecimal(t.cents) });
+      // Settlements are always in the base currency; the server parses with its decimals.
+      const base = view?.group.currency ?? "USD";
+      await api.createSettlement(id, { fromId: t.fromId, toId: t.toId, amount: minorToDecimal(t.cents, decimalsOf(base)) });
       await refetch();
     },
-    [id, refetch],
+    [id, refetch, view],
   );
 
   const removeSettlement = useCallback(
@@ -106,7 +111,9 @@ export function GroupPage({ id }: { id: string }) {
 
   return (
     <div className="app">
-      <Header view={view} live={live} onAddMember={addMember} onSetLeft={setLeft} addSignal={addMemberSignal} />
+      <Header view={view} live={live} onAddMember={addMember} onSetLeft={setLeft} addSignal={addMemberSignal}
+        onOpenConverter={() => setConverterOpen(true)}
+      />
       <main className="scroll">
         {error && (
           <div className="error-box" role="alert">
@@ -131,11 +138,15 @@ export function GroupPage({ id }: { id: string }) {
         <ExpenseSheet
           groupId={id}
           members={view.members}
+          rates={view.rates}
           expense={sheet.expense}
           onSave={save}
           onDelete={sheet.expense ? () => remove(sheet.expense!) : undefined}
           onClose={closeSheet}
         />
+      )}
+      {converterOpen && (
+        <Converter groupId={id} rates={view.rates} onClose={closeConverter} onRatesChanged={refetch} />
       )}
     </div>
   );

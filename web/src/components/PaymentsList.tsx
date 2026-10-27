@@ -2,7 +2,7 @@
 // deleted (mis-tap) after an inline confirm, same pattern as ExpenseList.
 import { useState } from "react";
 import type { GroupView, Settlement } from "../api";
-import { formatCents } from "../money";
+import { formatMoney } from "../money";
 import { Avatar } from "./Avatar";
 
 interface Props {
@@ -47,7 +47,7 @@ export function PaymentsList({ view, onDelete }: Props) {
           {confirmId === s.id ? (
             <div className="confirm-row">
               <span>
-                Delete payment {name(s.fromId)} → {name(s.toId)} {formatCents(s.amountCents)}?
+                Delete payment {name(s.fromId)} → {name(s.toId)} {formatMoney(s.amountCents, view.group.currency)}?
               </span>
               <span className="confirm-actions">
                 <button type="button" className="danger" disabled={busyId === s.id} onClick={() => void del(s)}>
@@ -74,11 +74,11 @@ export function PaymentsList({ view, onDelete }: Props) {
                 </span>
                 <span className="meta">· {dateLabel(s.createdAt)}</span>
               </div>
-              <span className="amt">{formatCents(s.amountCents)}</span>
+              <span className="amt">{formatMoney(s.amountCents, view.group.currency)}</span>
               <button
                 type="button"
                 className="icon-btn"
-                aria-label={`Delete payment ${name(s.fromId)} to ${name(s.toId)} ${formatCents(s.amountCents)}`}
+                aria-label={`Delete payment ${name(s.fromId)} to ${name(s.toId)} ${formatMoney(s.amountCents, view.group.currency)}`}
                 onClick={() => setConfirmId(s.id)}
               >
                 ×

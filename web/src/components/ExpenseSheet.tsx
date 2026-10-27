@@ -2,13 +2,16 @@
 // equal across everyone). Split previews are computed client-side with the server's integer rules
 // for display only; the saved result is whatever the server returns.
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Expense, ExpenseInput, Member, SplitMode } from "../api";
+import type { Expense, ExpenseInput, Member, Rates, SplitMode } from "../api";
 import { isComposingEnter } from "../keys";
 import {
-  centsToDecimal,
-  formatCents,
+  convertPreview,
+  decimalsOf,
+  formatMoney,
+  minorToDecimal,
   parseBasisPoints,
-  parseCents,
+  parseMinor,
+  parseRate,
   PERCENT_TOLERANCE_BP,
   previewEqual,
   previewPercent,
@@ -18,6 +21,8 @@ import { Avatar } from "./Avatar";
 interface Props {
   groupId: string;
   members: Member[];
+  /** The group's base currency and rate table (override first); refreshes via SSE. */
+  rates: Rates;
   /** undefined → add mode */
   expense?: Expense;
   onSave: (input: ExpenseInput) => Promise<void>;
@@ -43,9 +48,27 @@ function writeLastPayer(groupId: string, payerId: string) {
   }
 }
 
+const lastCurrencyKey = (groupId: string) => `expense-splitter:lastCurrency:${groupId}`;
+
+export function readLastCurrency(groupId: string): string | null {
+  try {
+    return localStorage.getItem(lastCurrencyKey(groupId));
+  } catch {
+    return null;
+  }
+}
+
+function writeLastCurrency(groupId: string, code: string) {
+  try {
+    localStorage.setItem(lastCurrencyKey(groupId), code);
+  } catch {
+    /* convenience only */
+  }
+}
+
 type Inputs = Record<string, string>;
 
-function initialState(members: Member[], groupId: string, expense?: Expense) {
+function initialState(members: Member[], groupId: string, rates: Rates, expense?: Expense) {
   const ids = members.map((m) => m.id);
   // Left members are never a default payer or default participant (SPEC "Leaving is a flag").
   const activeIds = members.filter((m) => !m.leftAt).map((m) => m.id);
@@ -55,9 +78,15 @@ function initialState(members: Member[], groupId: string, expense?: Expense) {
     if (expense?.splitMode === mode) for (const s of expense.splits) out[s.memberId] = s.inputValue ?? "";
     return out;
   };
+  const lastCur = readLastCurrency(groupId);
+  const known = (c: string | null): c is string => c === rates.base || rates.table.some((r) => r.currency === c);
+  const currency = expense?.currency ?? (known(lastCur) ? lastCur : rates.base);
   return {
     description: expense?.description ?? "",
-    amount: expense ? centsToDecimal(expense.amountCents) : "",
+    amount: expense ? minorToDecimal(expense.originalCents, decimalsOf(expense.currency)) : "",
+    currency,
+    // Editing keeps the expense's locked rate; a new expense starts from the table.
+    rate: expense ? expense.rate : (rates.table.find((r) => r.currency === currency)?.rate ?? "1"),
     payerId: expense?.payerId ?? (last && activeIds.includes(last) ? last : activeIds[0] ?? ids[0] ?? ""),
     mode: expense?.splitMode ?? ("equal" as SplitMode),
     equalIds: new Set(expense?.splitMode === "equal" ? expense.splits.map((s) => s.memberId) : activeIds),
@@ -66,10 +95,13 @@ function initialState(members: Member[], groupId: string, expense?: Expense) {
   };
 }
 
-export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onClose }: Props) {
-  const init = useMemo(() => initialState(members, groupId, expense), [members, groupId, expense]);
+export function ExpenseSheet({ groupId, members, rates, expense, onSave, onDelete, onClose }: Props) {
+  // Only the first value seeds state, so an SSE refresh never resets what the user typed.
+  const init = useMemo(() => initialState(members, groupId, rates, expense), [members, groupId, rates, expense]);
   const [description, setDescription] = useState(init.description);
   const [amount, setAmount] = useState(init.amount);
+  const [currency, setCurrency] = useState(init.currency);
+  const [rate, setRate] = useState(init.rate);
   const [payerId, setPayerId] = useState(init.payerId);
   const [mode, setMode] = useState<SplitMode>(init.mode);
   const [equalIds, setEqualIds] = useState<Set<string>>(init.equalIds);
@@ -93,9 +125,32 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
     };
   }, [onClose]);
 
-  const cents = parseCents(amount);
+  // Two currencies: the expense's own (`currency`, typed amount and exact shares) and the group's
+  // base (`rates.base`, the converted total that equal/percent previews and balances use).
+  const base = rates.base;
+  const baseDec = decimalsOf(base);
+  const isBase = currency === base;
+  const dec = decimalsOf(currency);
+  const tableRow = rates.table.find((r) => r.currency === currency);
+  const rateOk = isBase || parseRate(rate) !== null;
+  const orig = parseMinor(amount, dec);
+  const cents = orig === null ? null : isBase ? orig : rateOk ? convertPreview(orig, dec, baseDec, rate) : null;
   const amountTouched = amount.trim() !== "";
-  const amountError = amountTouched && cents === null ? "Enter an amount like 12.50 (digits, up to 2 decimals)" : amountTouched && cents === 0 ? "Amount must be more than $0.00" : null;
+  const amountError =
+    amountTouched && orig === null
+      ? dec === 0
+        ? `Enter a whole number of ${currency} (no decimals)`
+        : `Enter an amount like 12.50 (digits, up to ${dec} decimals)`
+      : amountTouched && orig === 0
+        ? `Amount must be more than ${formatMoney(0, currency)}`
+        : amountTouched && cents === 0
+          ? `Converts to ${formatMoney(0, base)} — too small`
+          : null;
+  const unitWord = (n: number) => (baseDec === 0 ? `${n} ${base}` : `${n}¢`);
+  const pickCurrency = (code: string) => {
+    setCurrency(code);
+    setRate(code === expense?.currency ? expense.rate : (rates.table.find((r) => r.currency === code)?.rate ?? "1"));
+  };
   const payer = members.find((m) => m.id === payerId);
   const idx = (id: string) => members.findIndex((m) => m.id === id);
   const activeMembers = members.filter((m) => !m.leftAt);
@@ -106,11 +161,12 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
   const equalShares = cents !== null ? previewEqual(cents, equalMembers.map((m) => m.id)) : [];
   const equalRemainder = cents !== null && equalMembers.length ? cents % equalMembers.length : 0;
 
-  const exactParsed = members.map((m) => ({ m, cents: (exact[m.id] ?? "").trim() === "" ? 0 : parseCents(exact[m.id] ?? "") }));
+  // Exact shares are typed in the expense's own currency; the server converts each one.
+  const exactParsed = members.map((m) => ({ m, cents: (exact[m.id] ?? "").trim() === "" ? 0 : parseMinor(exact[m.id] ?? "", dec) }));
   const exactById = new Map(exactParsed.map((r) => [r.m.id, r]));
   const exactInvalid = exactParsed.some((r) => r.cents === null);
   const exactSum = exactParsed.reduce((a, r) => a + (r.cents ?? 0), 0);
-  const exactDiff = cents !== null ? cents - exactSum : null;
+  const exactDiff = orig !== null ? orig - exactSum : null;
 
   const pctParsed = members.map((m) => ({ m, bp: (percent[m.id] ?? "").trim() === "" ? 0 : parseBasisPoints(percent[m.id] ?? "") }));
   const pctById = new Map(pctParsed.map((r) => [r.m.id, r]));
@@ -125,7 +181,7 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
   const splitValid =
     mode === "equal" ? equalMembers.length > 0 : mode === "exact" ? !exactInvalid && exactDiff === 0 : pctOk;
   const canSave =
-    !busy && description.trim().length > 0 && cents !== null && cents > 0 && Boolean(payer) && splitValid;
+    !busy && description.trim().length > 0 && cents !== null && cents > 0 && rateOk && Boolean(payer) && splitValid;
 
   function buildInput(): ExpenseInput {
     const split: ExpenseInput["split"] =
@@ -144,7 +200,10 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
                 .filter((r) => (r.bp ?? 0) > 0 || (percent[r.m.id] ?? "").trim() !== "")
                 .map((r) => ({ memberId: r.m.id, percent: (percent[r.m.id] ?? "").trim() || "0" })),
             };
-    return { description: description.trim(), amount: amount.trim(), payerId, split };
+    const input: ExpenseInput = { description: description.trim(), amount: amount.trim(), payerId, split };
+    // Always send the rate for a foreign expense so an edit keeps its locked rate instead of
+    // re-resolving to today's override.
+    return isBase ? input : { ...input, currency, rate: rate.trim() };
   }
 
   async function submit(e: FormEvent) {
@@ -155,6 +214,7 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
     try {
       await onSave(buildInput());
       writeLastPayer(groupId, payerId);
+      writeLastCurrency(groupId, currency);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err)); // server 400 lands here
@@ -225,7 +285,7 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
         className={`input mini ${exactById.get(m.id)?.cents === null ? "invalid" : ""}`}
         type="text"
         inputMode="decimal"
-        placeholder="0.00"
+        placeholder={minorToDecimal(0, dec)}
         value={exact[m.id] ?? ""}
         onChange={(e) => setExact({ ...exact, [m.id]: e.target.value })}
       />
@@ -249,7 +309,7 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
         />
         <span className="ph">%</span>
       </div>
-      <span className="res">{cents !== null && !pctInvalid ? formatCents(pctShareById.get(m.id) ?? 0) : "—"}</span>
+      <span className="res">{cents !== null && !pctInvalid ? formatMoney(pctShareById.get(m.id) ?? 0, base) : "—"}</span>
     </div>
   );
 
@@ -290,14 +350,26 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
         </div>
 
         <div className="field">
-          <label htmlFor="f-amount">Amount (USD)</label>
+          <label htmlFor="f-amount">Amount</label>
           <div className={`input amount ${amountError ? "invalid" : ""}`}>
-            <span className="cur">$</span>
+            <select
+              className="cur-select"
+              aria-label="Currency"
+              value={currency}
+              onChange={(e) => pickCurrency(e.target.value)}
+            >
+              <option value={base}>{base}</option>
+              {rates.table.map((r) => (
+                <option key={r.currency} value={r.currency}>
+                  {r.currency}
+                </option>
+              ))}
+            </select>
             <input
               id="f-amount"
               type="text"
-              inputMode="decimal"
-              placeholder="0.00"
+              inputMode={dec === 0 ? "numeric" : "decimal"}
+              placeholder={minorToDecimal(0, dec)}
               enterKeyHint="done"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -305,6 +377,33 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
             />
           </div>
           {amountError && <div className="hint warn">{amountError}</div>}
+          {!isBase && (
+            <div className="rate-line">
+              <span>1 {currency} =</span>
+              <input
+                className={`input mini rate ${rateOk ? "" : "invalid"}`}
+                aria-label={`Rate, ${base} per 1 ${currency}`}
+                type="text"
+                inputMode="decimal"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+              />
+              <span>{base}</span>
+              {expense && expense.currency === currency && rate === expense.rate ? (
+                <span className="tag">locked</span>
+              ) : tableRow && rate.trim() === tableRow.rate ? (
+                <span className="tag">{tableRow.source}</span>
+              ) : (
+                <span className="tag">custom</span>
+              )}
+              {tableRow && rate.trim() !== tableRow.rate && (
+                <button type="button" className="linklike" onClick={() => setRate(tableRow.rate)}>
+                  reset to {tableRow.rate}
+                </button>
+              )}
+              <b className="conv">{cents !== null ? `≈ ${formatMoney(cents, base)}` : rateOk ? "" : "rate like 0.2161"}</b>
+            </div>
+          )}
         </div>
 
         <div className="field">
@@ -347,17 +446,17 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
                   <div className="preview">
                     {equalShares.map((s) => (
                       <span className="each" key={s.memberId}>
-                        {members[idx(s.memberId)]?.name} <b>{formatCents(s.cents)}</b>
+                        {members[idx(s.memberId)]?.name} <b>{formatMoney(s.cents, base)}</b>
                       </span>
                     ))}
                   </div>
                   <div className="hint">
                     {equalRemainder > 0
-                      ? `Extra ${equalRemainder}¢ ${equalRemainder === 1 ? "goes" : "go"} to ${equalMembers
+                      ? `Extra ${unitWord(equalRemainder)} ${equalRemainder === 1 ? "goes" : "go"} to ${equalMembers
                           .slice(0, equalRemainder)
                           .map((m) => m.name)
                           .join(", ")} (first ${equalRemainder === 1 ? "member" : "members"}). `
-                      : "Splits evenly, no leftover cents. "}
+                      : "Splits evenly, nothing left over. "}
                     Tap a name to exclude or include them.
                   </div>
                 </>
@@ -379,15 +478,17 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
                 {leftMembers.map(exactRow)}
               </div>
               {exactInvalid ? (
-                <div className="hint warn">Each amount must look like 12.50.</div>
-              ) : cents === null ? (
+                <div className="hint warn">
+                  Each amount must look like {dec === 0 ? "1200" : "12.50"} ({currency}).
+                </div>
+              ) : orig === null ? (
                 <div className="hint">Enter the total amount first.</div>
               ) : exactDiff === 0 ? (
-                <div className="hint ok">✓ Sums to {formatCents(cents)}</div>
+                <div className="hint ok">✓ Sums to {formatMoney(orig, currency)}</div>
               ) : exactDiff !== null && exactDiff > 0 ? (
-                <div className="hint warn">{formatCents(exactDiff)} left to assign</div>
+                <div className="hint warn">{formatMoney(exactDiff, currency)} left to assign</div>
               ) : (
-                <div className="hint warn">{formatCents(-(exactDiff ?? 0))} over</div>
+                <div className="hint warn">{formatMoney(-(exactDiff ?? 0), currency)} over</div>
               )}
             </>
           )}
@@ -407,9 +508,9 @@ export function ExpenseSheet({ groupId, members, expense, onSave, onDelete, onCl
                 <div className="hint warn">Each percent must look like 33.33.</div>
               ) : pctOk ? (
                 <div className="hint ok">
-                  ✓ {formatPct(pctSum)}%{cents !== null ? ` · shares sum to ${formatCents(cents)}` : ""}
+                  ✓ {formatPct(pctSum)}%{cents !== null ? ` · shares sum to ${formatMoney(cents, base)}` : ""}
                   {pctResidual !== 0 && cents !== null
-                    ? ` · ${pctResidual > 0 ? "+" : "−"}${Math.abs(pctResidual)}¢ spread by largest remainder`
+                    ? ` · ${pctResidual > 0 ? "+" : "−"}${unitWord(Math.abs(pctResidual))} spread by largest remainder`
                     : ""}
                 </div>
               ) : pctSum < 10000 ? (

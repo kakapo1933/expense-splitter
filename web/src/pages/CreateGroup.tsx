@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { isComposingEnter } from "../keys";
+import { CURRENCIES } from "../money";
 import { readRecent, relativeDay } from "../recent";
 import { navigate } from "../router";
 
@@ -8,6 +9,7 @@ export function CreateGroup() {
   const [name, setName] = useState("");
   const [members, setMembers] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [currency, setCurrency] = useState("USD");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent] = useState(readRecent);
@@ -33,7 +35,7 @@ export function CreateGroup() {
     setBusy(true);
     setError(null);
     try {
-      const group = await api.createGroup(trimmed);
+      const group = await api.createGroup(trimmed, currency);
       for (const m of all) await api.addMember(group.id, m); // sequential: member order = insertion order
       navigate(`/g/${group.id}`);
     } catch (err) {
@@ -72,6 +74,16 @@ export function CreateGroup() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+        </div>
+        <div className="field">
+          <label htmlFor="g-cur">Base currency — balances and settle-up use this</label>
+          <select id="g-cur" className="input select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} · {c.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="field">
           <label htmlFor="g-member">Members</label>

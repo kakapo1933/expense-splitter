@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { GroupView, Transfer } from "../api";
-import { formatCents } from "../money";
+import { convertPreview, decimalsOf, formatMoney } from "../money";
 import { Avatar } from "./Avatar";
 
 type SettleMode = "fewest" | "direct";
@@ -35,6 +35,15 @@ export function SettleCard({ view, onAddMember, onMarkPaid }: Props) {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Display-only currency for the plan rows; "Mark paid" always records the base amount.
+  const base = view.group.currency;
+  const [showIn, setShowIn] = useState(base);
+  const showRow = view.rates.table.find((r) => r.currency === showIn);
+  const shown = (cents: number): string => {
+    if (!showRow) return formatMoney(cents, base);
+    const x = convertPreview(cents, decimalsOf(base), showRow.decimals, "1", showRow.rate);
+    return x === null ? formatMoney(cents, base) : `≈ ${formatMoney(x, showIn, showRow.decimals)}`;
+  };
 
   async function pay(t: Transfer) {
     const k = rowKey(t);
@@ -82,7 +91,7 @@ export function SettleCard({ view, onAddMember, onMarkPaid }: Props) {
         <div className="row" key={rowKey(t)}>
           <div className="confirm-row">
             <span>
-              Record {name(t.fromId)} → {name(t.toId)} <b className="amt">{formatCents(t.cents)}</b> as paid?
+              Record {name(t.fromId)} → {name(t.toId)} <b className="amt">{formatMoney(t.cents, base)}</b> as paid?
             </span>
             <span className="confirm-actions">
               <button type="button" className="paid" disabled={busyKey === rowKey(t)} onClick={() => void pay(t)}>
@@ -109,11 +118,11 @@ export function SettleCard({ view, onAddMember, onMarkPaid }: Props) {
             <span className="name">{name(t.toId)}</span>
           </span>
         </div>
-        <span className="amt">{formatCents(t.cents)}</span>
+        <span className="amt">{shown(t.cents)}</span>
         <button
           type="button"
           className="mark-paid"
-          aria-label={`Mark ${name(t.fromId)} → ${name(t.toId)} ${formatCents(t.cents)} as paid`}
+          aria-label={`Mark ${name(t.fromId)} → ${name(t.toId)} ${formatMoney(t.cents, base)} as paid`}
           onClick={() => setConfirmKey(rowKey(t))}
         >
           <span className="txt">Mark paid</span>
@@ -131,6 +140,19 @@ export function SettleCard({ view, onAddMember, onMarkPaid }: Props) {
         {n > 0 && (
           <span className="meta">
             {n} {n === 1 ? "payment settles" : "payments settle"} everyone
+            <select
+              className="show-in"
+              aria-label="Show amounts in"
+              value={showIn}
+              onChange={(e) => setShowIn(e.target.value)}
+            >
+              <option value={base}>in {base}</option>
+              {view.rates.table.map((r) => (
+                <option key={r.currency} value={r.currency}>
+                  show in {r.currency}
+                </option>
+              ))}
+            </select>
           </span>
         )}
       </div>

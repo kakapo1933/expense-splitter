@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { GroupView } from "../api";
 import { isComposingEnter } from "../keys";
-import { formatCents } from "../money";
+import { formatMoney } from "../money";
 import { navigate } from "../router";
 import type { LiveState } from "../useGroup";
 import { Avatar } from "./Avatar";
@@ -14,9 +14,10 @@ interface Props {
   onSetLeft: (memberId: string, left: boolean) => Promise<void>;
   /** Increment to open the inline "+ member" field from elsewhere (e.g. the empty state). */
   addSignal?: number;
+  onOpenConverter: () => void;
 }
 
-export function Header({ view, live, onAddMember, onSetLeft, addSignal = 0 }: Props) {
+export function Header({ view, live, onAddMember, onSetLeft, addSignal = 0, onOpenConverter }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,6 +111,14 @@ export function Header({ view, live, onAddMember, onSetLeft, addSignal = 0 }: Pr
       <div className="title-row">
         <h1>{view.group.name}</h1>
         <div className="hdr-right">
+          <button
+            type="button"
+            className="cur-badge"
+            onClick={onOpenConverter}
+            aria-label={`Base currency ${view.group.currency} — open converter`}
+          >
+            {view.group.currency}
+          </button>
           <span className={`live ${live === "live" ? "" : "off"}`} role="status">
             {live === "live" ? "live" : live === "connecting" ? "connecting…" : "reconnecting…"}
           </span>
@@ -132,7 +141,7 @@ export function Header({ view, live, onAddMember, onSetLeft, addSignal = 0 }: Pr
       )}
       <div className="sub">
         {n} {n === 1 ? "member" : "members"}
-        {nLeft > 0 && ` · ${nLeft} left`} · {m} {m === 1 ? "expense" : "expenses"} · {formatCents(total)} total
+        {nLeft > 0 && ` · ${nLeft} left`} · {m} {m === 1 ? "expense" : "expenses"} · {formatMoney(total, view.group.currency)} total
       </div>
       <div className="chips">
         {view.members.map((mem, i) => {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Expense, GroupView } from "../api";
-import { formatCents } from "../money";
+import { formatMoney, shortRate } from "../money";
 
 interface Props {
   view: GroupView;
@@ -77,7 +77,14 @@ export function ExpenseList({ view, onEdit, onDelete }: Props) {
                     {name(e.payerId)} paid · {splitLabel(e, view)} · {dateLabel(e.createdAt)}
                   </div>
                 </button>
-                <span className="amt">{formatCents(e.amountCents)}</span>
+                <span className="amt-col">
+                  <span className="amt">{formatMoney(e.originalCents, e.currency)}</span>
+                  {e.currency !== view.group.currency && (
+                    <span className="conv">
+                      ≈ {formatMoney(e.amountCents, view.group.currency)} @ {shortRate(e.rate)}
+                    </span>
+                  )}
+                </span>
                 <button
                   type="button"
                   className="icon-btn"

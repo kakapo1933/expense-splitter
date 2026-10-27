@@ -39,6 +39,11 @@ export interface Expense {
   amountCents: number;
   payerId: string;
   splitMode: SplitMode;
+  /** Currency as paid; `originalCents` are its minor units. `amountCents` is the converted base amount. */
+  currency: string;
+  originalCents: number;
+  /** Locked rate: base units per 1 unit of `currency` (decimal string, "1" for base). */
+  rate: string;
   createdAt: string;
   updatedAt: string;
   splits: Split[];
@@ -57,6 +62,21 @@ export interface Transfer {
   cents: number;
 }
 
+export interface RateRow {
+  currency: string;
+  name: string;
+  decimals: number;
+  /** Base units per 1 unit of `currency`. */
+  rate: string;
+  source: "seed" | "override";
+}
+
+export interface Rates {
+  base: string;
+  /** Every non-base currency. */
+  table: RateRow[];
+}
+
 export interface GroupView {
   group: Group;
   members: Member[];
@@ -66,6 +86,7 @@ export interface GroupView {
   balances: Balance[];
   settlement: Transfer[];
   settlementDirect: Transfer[];
+  rates: Rates;
 }
 
 export type SplitInput =
@@ -78,6 +99,9 @@ export interface ExpenseInput {
   amount: string;
   payerId: string;
   split: SplitInput;
+  /** Omit for the base currency; `rate` must also be omitted then (server 400 INVALID_RATE). */
+  currency?: string;
+  rate?: string;
 }
 
 interface ZodIssue {
@@ -138,7 +162,8 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
 const json = (data: unknown) => JSON.stringify(data);
 
 export const api = {
-  createGroup: (name: string) => fetchJson<Group>("/api/groups", { method: "POST", body: json({ name }) }),
+  createGroup: (name: string, currency: string) =>
+    fetchJson<Group>("/api/groups", { method: "POST", body: json({ name, currency }) }),
   getGroup: (id: string) => fetchJson<GroupView>(`/api/groups/${id}`),
   addMember: (groupId: string, name: string) =>
     fetchJson<Member>(`/api/groups/${groupId}/members`, { method: "POST", body: json({ name }) }),
@@ -154,5 +179,9 @@ export const api = {
     fetchJson<void>(`/api/groups/${groupId}/settlements/${settlementId}`, { method: "DELETE" }),
   setMemberLeft: (groupId: string, memberId: string, left: boolean) =>
     fetchJson<Member>(`/api/groups/${groupId}/members/${memberId}`, { method: "PATCH", body: json({ left }) }),
+  setRate: (groupId: string, currency: string, rate: string) =>
+    fetchJson<Rates>(`/api/groups/${groupId}/rates/${currency}`, { method: "PUT", body: json({ rate }) }),
+  deleteRate: (groupId: string, currency: string) =>
+    fetchJson<void>(`/api/groups/${groupId}/rates/${currency}`, { method: "DELETE" }),
   eventsUrl: (groupId: string) => `/api/groups/${groupId}/events`,
 };
