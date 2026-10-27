@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { openDb } from "./db.js";
-import { ConflictError, NotFoundError, SameMemberError, UnknownMemberError } from "./errors.js";
+import { ConflictError, GroupNotEmptyError, NotFoundError, SameMemberError, UnknownMemberError } from "./errors.js";
 import { MoneyError } from "./money.js";
+import { CurrencyError } from "./rates.js";
 import { createService } from "./service.js";
 
 const fresh = () => createService(openDb(":memory:"));
@@ -269,5 +274,220 @@ describe("service: members leaving", () => {
     const other = svc.createGroup("O");
     const x = svc.addMember(other.id, "X");
     assert.throws(() => svc.setMemberLeft(g.id, x.id, true), NotFoundError);
+  });
+});
+
+describe("service: multi-currency", () => {
+  const setup = (base?: string) => {
+    const svc = fresh();
+    const g = svc.createGroup("Trip", base);
+    const ids = ["Ann", "Bob", "Cy"].map((n) => svc.addMember(g.id, n).id);
+    return { svc, g, ids };
+  };
+  const equal = (ids: string[], extra: object) => ({
+    description: "x",
+    payerId: ids[0]!,
+    split: { mode: "equal" as const, memberIds: ids },
+    ...extra,
+  });
+  const code = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as { code?: string }).code;
+    }
+    return "no error";
+  };
+
+  it("TWD expense on a USD group converts at the seeded rate and splits in USD", () => {
+    const { svc, g, ids } = setup();
+    assert.equal(g.currency, "USD");
+    const e = svc.createExpense(g.id, equal(ids, { amount: "1200", currency: "TWD" }));
+    assert.equal(e.currency, "TWD");
+    assert.equal(e.originalCents, 1200);
+    assert.equal(e.rate, "0.031");
+    assert.equal(e.amountCents, 3720);
+    assert.deepEqual(e.splits.map((s) => s.shareCents), [1240, 1240, 1240]);
+    const view = svc.getGroupView(g.id);
+    assert.equal(view.balances.reduce((n, b) => n + b.netCents, 0), 0);
+    assert.equal(view.expenses[0]!.rate, "0.031");
+  });
+
+  it("base-currency expense: rate 1, and a supplied rate is rejected", () => {
+    const { svc, g, ids } = setup();
+    const e = svc.createExpense(g.id, equal(ids, { amount: "10.00" }));
+    assert.deepEqual([e.currency, e.originalCents, e.rate, e.amountCents], ["USD", 1000, "1", 1000]);
+    assert.equal(code(() => svc.createExpense(g.id, equal(ids, { amount: "10", rate: "1.1" }))), "INVALID_RATE");
+    assert.equal(
+      code(() => svc.createExpense(g.id, equal(ids, { amount: "10", currency: "USD", rate: "1" }))),
+      "INVALID_RATE",
+    );
+  });
+
+  it("amount decimals follow the expense currency (TWD 0, base TWD settlements 0)", () => {
+    const { svc, g, ids } = setup();
+    assert.equal(code(() => svc.createExpense(g.id, equal(ids, { amount: "12.5", currency: "TWD" }))), "INVALID_AMOUNT");
+    assert.equal(code(() => svc.createExpense(g.id, equal(ids, { amount: "1.234" }))), "INVALID_AMOUNT");
+    const t = setup("TWD");
+    assert.equal(t.g.currency, "TWD");
+    const e = t.svc.createExpense(t.g.id, equal(t.ids, { amount: "300" }));
+    assert.equal(e.amountCents, 300); // whole dollars, not 30000
+    const st = t.svc.createSettlement(t.g.id, { fromId: t.ids[1]!, toId: t.ids[0]!, amount: "100" });
+    assert.equal(st.amountCents, 100);
+    assert.equal(code(() => t.svc.createSettlement(t.g.id, { fromId: t.ids[1]!, toId: t.ids[0]!, amount: "1.5" })), "INVALID_AMOUNT");
+  });
+
+  it("unknown currency → UNKNOWN_CURRENCY (400) on group, expense, rate", () => {
+    const { svc, g, ids } = setup();
+    assert.throws(() => svc.createGroup("X", "XYZ"), (e: unknown) => e instanceof CurrencyError && e.status === 400 && e.code === "UNKNOWN_CURRENCY");
+    assert.equal(code(() => svc.createExpense(g.id, equal(ids, { amount: "1", currency: "XYZ" }))), "UNKNOWN_CURRENCY");
+    assert.equal(code(() => svc.setRate(g.id, "XYZ", "1")), "UNKNOWN_CURRENCY");
+    assert.equal(code(() => svc.setGroupCurrency(g.id, "XYZ")), "UNKNOWN_CURRENCY");
+  });
+
+  it("override changes the default for new expenses, not existing ones; delete restores seed", () => {
+    const { svc, g, ids } = setup();
+    const old = svc.createExpense(g.id, equal(ids, { amount: "1000", currency: "TWD" }));
+    assert.equal(old.amountCents, 3100);
+    const rates = svc.setRate(g.id, "TWD", "0.032");
+    const twd = rates.table.find((r) => r.currency === "TWD")!;
+    assert.deepEqual([twd.rate, twd.source, twd.decimals], ["0.032", "override", 0]);
+    assert.equal(rates.base, "USD");
+    assert.ok(!rates.table.some((r) => r.currency === "USD"));
+    assert.equal(rates.table.length, 19);
+
+    const neu = svc.createExpense(g.id, equal(ids, { amount: "1000", currency: "TWD" }));
+    assert.deepEqual([neu.rate, neu.amountCents], ["0.032", 3200]);
+    const view = svc.getGroupView(g.id);
+    const oldNow = view.expenses.find((e) => e.id === old.id)!;
+    assert.deepEqual([oldNow.rate, oldNow.amountCents], ["0.031", 3100]);
+
+    // explicit rate beats the override
+    const exp = svc.createExpense(g.id, equal(ids, { amount: "1000", currency: "TWD", rate: "0.03" }));
+    assert.equal(exp.amountCents, 3000);
+
+    svc.deleteRate(g.id, "TWD");
+    assert.equal(svc.getGroupView(g.id).rates.table.find((r) => r.currency === "TWD")!.source, "seed");
+    assert.throws(() => svc.deleteRate(g.id, "TWD"), NotFoundError);
+    assert.equal(code(() => svc.setRate(g.id, "USD", "1")), "INVALID_RATE");
+    assert.equal(code(() => svc.setRate(g.id, "TWD", "0")), "INVALID_RATE");
+  });
+
+  it("edit with a new rate re-converts and re-splits", () => {
+    const { svc, g, ids } = setup();
+    const e = svc.createExpense(g.id, equal(ids, { amount: "1200", currency: "TWD" }));
+    const e2 = svc.updateExpense(g.id, e.id, equal(ids, { amount: "1200", currency: "TWD", rate: "0.03" }));
+    assert.deepEqual([e2.rate, e2.amountCents], ["0.03", 3600]);
+    assert.deepEqual(e2.splits.map((s) => s.shareCents), [1200, 1200, 1200]);
+    // switching back to base on edit resets the rate to 1
+    const e3 = svc.updateExpense(g.id, e.id, equal(ids, { amount: "36.00" }));
+    assert.deepEqual([e3.currency, e3.rate, e3.originalCents, e3.amountCents], ["USD", "1", 3600, 3600]);
+  });
+
+  it("exact shares typed in the original currency sum to amount_cents exactly", () => {
+    const { svc, g, ids } = setup();
+    // 100 TWD @ 0.031 = 310¢. Shares 33/33/34 TWD → 102.3/102.3/105.4¢ → floors 102+102+105 = 309;
+    // the residual cent goes to the largest remainder (Cy, .4).
+    const e = svc.createExpense(g.id, {
+      description: "x",
+      amount: "100",
+      currency: "TWD",
+      payerId: ids[0]!,
+      split: {
+        mode: "exact",
+        shares: [
+          { memberId: ids[0]!, amount: "33" },
+          { memberId: ids[1]!, amount: "33" },
+          { memberId: ids[2]!, amount: "34" },
+        ],
+      },
+    });
+    assert.equal(e.amountCents, 310);
+    const by = (id: string) => e.splits.find((s) => s.memberId === id)!;
+    assert.deepEqual(ids.map((id) => [by(id).shareCents, by(id).inputValue]), [[102, "33"], [102, "33"], [106, "34"]]);
+    assert.equal(e.splits.reduce((n, s) => n + s.shareCents, 0), e.amountCents);
+    // shares must sum in the original currency
+    assert.equal(
+      code(() =>
+        svc.createExpense(g.id, {
+          description: "x",
+          amount: "100",
+          currency: "TWD",
+          payerId: ids[0]!,
+          split: { mode: "exact", shares: [{ memberId: ids[0]!, amount: "3.10" }] },
+        }),
+      ),
+      "INVALID_AMOUNT",
+    );
+  });
+
+  it("exact shares: residual stays exact across many awkward rates (property)", () => {
+    const { svc, g, ids } = setup();
+    for (let i = 1; i <= 50; i++) {
+      const a = 7 * i + 3, b = 11 * i + 1, c = 13 * i;
+      const e = svc.createExpense(g.id, {
+        description: "p",
+        amount: String(a + b + c),
+        currency: "JPY",
+        rate: `0.00${i}7`,
+        payerId: ids[0]!,
+        split: {
+          mode: "exact",
+          shares: [
+            { memberId: ids[0]!, amount: String(a) },
+            { memberId: ids[1]!, amount: String(b) },
+            { memberId: ids[2]!, amount: String(c) },
+          ],
+        },
+      });
+      assert.equal(e.splits.reduce((n, s) => n + s.shareCents, 0), e.amountCents, `i=${i}`);
+    }
+  });
+
+  it("base change allowed while empty, GROUP_NOT_EMPTY (409) once an expense exists", () => {
+    const { svc, g, ids } = setup();
+    svc.setRate(g.id, "EUR", "1.1");
+    const changed = svc.setGroupCurrency(g.id, "EUR");
+    assert.equal(changed.currency, "EUR");
+    const view = svc.getGroupView(g.id);
+    assert.equal(view.rates.base, "EUR");
+    assert.ok(!view.rates.table.some((r) => r.currency === "EUR"));
+    svc.createExpense(g.id, equal(ids, { amount: "5" }));
+    assert.throws(() => svc.setGroupCurrency(g.id, "USD"), (e: unknown) => e instanceof GroupNotEmptyError && e.status === 409);
+  });
+
+  it("old-schema DB: columns added and backfilled as paid in base at rate 1", () => {
+    const dir = mkdtempSync(join(tmpdir(), "es-mig-"));
+    const path = join(dir, "old.db");
+    try {
+      const old = new DatabaseSync(path);
+      old.exec(`
+        CREATE TABLE groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', created_at TEXT NOT NULL);
+        CREATE TABLE members (id TEXT PRIMARY KEY, group_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE (group_id, name));
+        CREATE TABLE expenses (id TEXT PRIMARY KEY, group_id TEXT NOT NULL, payer_id TEXT NOT NULL, description TEXT NOT NULL,
+          amount_cents INTEGER NOT NULL, split_mode TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE TABLE expense_splits (expense_id TEXT NOT NULL, member_id TEXT NOT NULL, share_cents INTEGER NOT NULL, input_value TEXT,
+          PRIMARY KEY (expense_id, member_id));
+        INSERT INTO groups VALUES ('g1', 'Old', 'EUR', '2025-01-01');
+        INSERT INTO members VALUES ('m1', 'g1', 'Ann', '2025-01-01');
+        INSERT INTO members VALUES ('m2', 'g1', 'Bob', '2025-01-01');
+        INSERT INTO expenses VALUES ('e1', 'g1', 'm1', 'Dinner', 4200, 'equal', '2025-01-01', '2025-01-01');
+        INSERT INTO expense_splits VALUES ('e1', 'm1', 2100, NULL), ('e1', 'm2', 2100, NULL);
+      `);
+      old.close();
+
+      const db = openDb(path);
+      const row = db.prepare("SELECT currency, original_cents AS o, rate_nanos AS r FROM expenses WHERE id = 'e1'").get();
+      assert.deepEqual({ ...row }, { currency: "EUR", o: 4200, r: 1_000_000_000 });
+      const view = createService(db).getGroupView("g1");
+      const e = view.expenses[0]!;
+      assert.deepEqual([e.currency, e.originalCents, e.rate, e.amountCents], ["EUR", 4200, "1", 4200]);
+      assert.deepEqual(view.balances.map((b) => b.netCents), [2100, -2100]);
+      assert.equal(view.rates.base, "EUR");
+      db.close();
+      openDb(path).close(); // idempotent second open
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

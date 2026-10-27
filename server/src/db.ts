@@ -31,12 +31,24 @@ CREATE TABLE IF NOT EXISTS expenses (
   group_id     TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   payer_id     TEXT NOT NULL REFERENCES members(id),
   description  TEXT NOT NULL,
-  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),   -- in the group's base currency
   split_mode   TEXT NOT NULL CHECK (split_mode IN ('equal', 'exact', 'percent')),
   created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL
+  updated_at   TEXT NOT NULL,
+  currency       TEXT,       -- currency as paid; NULL only transiently before migrate() backfills
+  original_cents INTEGER,    -- amount as paid, minor units of currency
+  rate_nanos     INTEGER     -- base per 1 unit of currency, scaled 1e9 (RATE_SCALE in rates.ts)
 );
 CREATE INDEX IF NOT EXISTS expenses_group_idx ON expenses(group_id);
+
+-- Per-group override of the seeded rate from currency to the group's base currency.
+CREATE TABLE IF NOT EXISTS group_rates (
+  group_id   TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  currency   TEXT NOT NULL,
+  rate_nanos INTEGER NOT NULL CHECK (rate_nanos > 0),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (group_id, currency)
+);
 
 CREATE TABLE IF NOT EXISTS expense_splits (
   expense_id  TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
@@ -64,13 +76,28 @@ CREATE INDEX IF NOT EXISTS settlements_group_idx ON settlements(group_id);
  */
 const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[] = [
   { table: "members", column: "left_at", ddl: "ALTER TABLE members ADD COLUMN left_at TEXT" },
+  { table: "expenses", column: "currency", ddl: "ALTER TABLE expenses ADD COLUMN currency TEXT" },
+  { table: "expenses", column: "original_cents", ddl: "ALTER TABLE expenses ADD COLUMN original_cents INTEGER" },
+  { table: "expenses", column: "rate_nanos", ddl: "ALTER TABLE expenses ADD COLUMN rate_nanos INTEGER" },
 ];
 
-function migrate(db: DatabaseSync): void {
+/**
+ * Expenses written before multi-currency have no original/rate: they were paid in the group's
+ * base, so backfill "paid in base at rate 1". Idempotent (only touches NULLs).
+ */
+const BACKFILL_EXPENSE_CURRENCY = `
+UPDATE expenses SET
+  currency       = COALESCE(currency, (SELECT currency FROM groups WHERE groups.id = expenses.group_id)),
+  original_cents = COALESCE(original_cents, amount_cents),
+  rate_nanos     = COALESCE(rate_nanos, 1000000000)
+WHERE currency IS NULL OR original_cents IS NULL OR rate_nanos IS NULL`;
+
+export function migrate(db: DatabaseSync): void {
   for (const m of COLUMN_MIGRATIONS) {
     const cols = db.prepare(`PRAGMA table_info(${m.table})`).all() as { name: string }[];
     if (!cols.some((c) => c.name === m.column)) db.exec(m.ddl);
   }
+  db.exec(BACKFILL_EXPENSE_CURRENCY);
 }
 
 /** Open (or create) the database and ensure the schema exists. Pass ":memory:" in tests. */

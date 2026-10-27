@@ -35,3 +35,13 @@ export class UnknownMemberError extends Error {
     this.name = "UnknownMemberError";
   }
 }
+
+/** Changing a group's base currency after expenses exist (they are converted at a locked rate). */
+export class GroupNotEmptyError extends Error {
+  readonly status = 409;
+  readonly code = "GROUP_NOT_EMPTY";
+  constructor() {
+    super("base currency can only change while the group has no expenses");
+    this.name = "GroupNotEmptyError";
+  }
+}

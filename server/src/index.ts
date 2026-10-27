@@ -7,7 +7,8 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { openDb } from "./db.js";
-import { ConflictError, NotFoundError, SameMemberError, UnknownMemberError } from "./errors.js";
+import { ConflictError, GroupNotEmptyError, NotFoundError, SameMemberError, UnknownMemberError } from "./errors.js";
+import { CurrencyError } from "./rates.js";
 import { MoneyError } from "./money.js";
 import { createRoutes } from "./routes.js";
 import { createService } from "./service.js";
@@ -26,7 +27,12 @@ app.onError((err, c) => {
   if (err instanceof ZodError) {
     return c.json({ error: "VALIDATION", issues: err.issues }, 400);
   }
-  if (err instanceof MoneyError || err instanceof UnknownMemberError || err instanceof SameMemberError) {
+  if (
+    err instanceof MoneyError ||
+    err instanceof CurrencyError ||
+    err instanceof UnknownMemberError ||
+    err instanceof SameMemberError
+  ) {
     return c.json({ error: err.code, message: err.message }, 400);
   }
   if (err instanceof SyntaxError) {
@@ -35,7 +41,7 @@ app.onError((err, c) => {
   if (err instanceof NotFoundError) {
     return c.json({ error: "NOT_FOUND", message: err.message }, 404);
   }
-  if (err instanceof ConflictError) {
+  if (err instanceof ConflictError || err instanceof GroupNotEmptyError) {
     return c.json({ error: err.code, message: err.message }, 409);
   }
   if (err instanceof HTTPException) {

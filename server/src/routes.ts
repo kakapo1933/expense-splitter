@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { ZodType } from "zod";
 import { publish, subscribe } from "./events.js";
-import { ExpenseInput, MemberPatch, NameInput, SettlementInput } from "./schemas.js";
+import { ExpenseInput, GroupInput, GroupPatch, MemberPatch, NameInput, RateInput, SettlementInput } from "./schemas.js";
 import type { Service } from "./service.js";
 
 const KEEPALIVE_MS = 25_000;
@@ -19,11 +19,35 @@ export function createRoutes(svc: Service) {
   const api = new Hono();
 
   api.post("/groups", async (c) => {
-    const { name } = await parseBody(c.req.raw, NameInput);
-    return c.json(svc.createGroup(name), 201);
+    const { name, currency } = await parseBody(c.req.raw, GroupInput);
+    return c.json(svc.createGroup(name, currency), 201);
   });
 
   api.get("/groups/:id", (c) => c.json(svc.getGroupView(c.req.param("id"))));
+
+  /** Base currency; 409 GROUP_NOT_EMPTY once any expense exists. */
+  api.patch("/groups/:id", async (c) => {
+    const groupId = c.req.param("id");
+    const { currency } = await parseBody(c.req.raw, GroupPatch);
+    const group = svc.setGroupCurrency(groupId, currency);
+    publish(groupId);
+    return c.json(group);
+  });
+
+  api.put("/groups/:id/rates/:currency", async (c) => {
+    const { id: groupId, currency } = c.req.param();
+    const { rate } = await parseBody(c.req.raw, RateInput);
+    const rates = svc.setRate(groupId, currency, rate);
+    publish(groupId);
+    return c.json(rates);
+  });
+
+  api.delete("/groups/:id/rates/:currency", (c) => {
+    const { id: groupId, currency } = c.req.param();
+    svc.deleteRate(groupId, currency);
+    publish(groupId);
+    return c.body(null, 204);
+  });
 
   api.post("/groups/:id/members", async (c) => {
     const groupId = c.req.param("id");
