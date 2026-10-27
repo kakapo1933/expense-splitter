@@ -20,7 +20,7 @@ export function Converter({ groupId, rates, onClose, onRatesChanged }: Props) {
   const codes = [base, ...rates.table.map((r) => r.currency)];
   const rateOf = (code: string) => (code === base ? "1" : (rates.table.find((r) => r.currency === code)?.rate ?? "1"));
   const last = readLastCurrency(groupId);
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("");
   const [from, setFrom] = useState(base);
   const [to, setTo] = useState(last && last !== base && codes.includes(last) ? last : (rates.table[0]?.currency ?? base));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -107,6 +107,7 @@ export function Converter({ groupId, rates, onClose, onRatesChanged }: Props) {
                 id="c-amount"
                 type="text"
                 inputMode={fromDec === 0 ? "numeric" : "decimal"}
+                placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
