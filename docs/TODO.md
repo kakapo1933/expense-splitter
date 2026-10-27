@@ -72,3 +72,6 @@
 - [x] 前端：settle 列 Mark paid（inline 確認）、Payments 區（可刪）、成員 chip 點開 Mark as left／Rejoin、餘額 Left 小節、sheet 內離開者放 LEFT 分隔線下預設不勾且不作預設付款人（commit e497c60；審查在 leave-test 群組 375px 實測：Mark paid 後方案 2→1 筆、B settled、Payments 出現一筆；C 標記離開後三處皆正確）
 - [x] README 補兩個功能的取捨（還款是資料不是旗標；離開是旗標不是刪除）
 
+
+## 8. 新功能：多幣別
+- [ ] 依 `TODO-multi-currency.md` 分五段實作，每段驗證後回填該檔

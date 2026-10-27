@@ -22,13 +22,18 @@ export const MAX_AMOUNT_CENTS = 1_000_000_000; // 10,000,000.00
 
 const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
 
-/** Parse "12.34" → 1234 using string arithmetic only (never float). */
-function parseDecimalString(s: string, opts: { allowZero: boolean }): number {
-  if (typeof s !== "string" || !AMOUNT_RE.test(s)) {
+/**
+ * Parse "12.34" → 1234 using string arithmetic only (never float). `decimals` is the currency's
+ * minor-unit count (USD 2, TWD 0): "1200" is valid TWD, "12.5" is not.
+ */
+function parseDecimalString(s: string, opts: { allowZero: boolean; decimals?: number }): number {
+  const decimals = opts.decimals ?? 2;
+  const re = decimals === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`);
+  if (typeof s !== "string" || !re.test(s)) {
     throw new MoneyError("INVALID_AMOUNT", `invalid amount "${s}"`);
   }
   const [whole, frac = ""] = s.split(".");
-  const cents = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  const cents = Number(whole) * 10 ** decimals + Number(frac.padEnd(decimals, "0") || "0");
   if (!Number.isSafeInteger(cents)) {
     throw new MoneyError("AMOUNT_OUT_OF_RANGE", `amount "${s}" too large`);
   }
@@ -42,8 +47,8 @@ function parseDecimalString(s: string, opts: { allowZero: boolean }): number {
 }
 
 /** Decimal string matching ^\d+(\.\d{1,2})?$, > 0, ≤ 10,000,000.00 → integer cents. */
-export function parseAmount(s: string): number {
-  return parseDecimalString(s, { allowZero: false });
+export function parseAmount(s: string, decimals = 2): number {
+  return parseDecimalString(s, { allowZero: false, decimals });
 }
 
 export interface Split {
@@ -149,12 +154,13 @@ export function splitPercent(
 export function splitExact(
   totalCents: number,
   shares: { memberId: string; amount: string }[],
+  decimals = 2,
 ): SplitWithInput[] {
   assertNonEmpty(shares.map((s) => s.memberId));
   assertNoDuplicates(shares.map((s) => s.memberId));
   const result = shares.map((s) => ({
     memberId: s.memberId,
-    shareCents: parseDecimalString(s.amount, { allowZero: true }),
+    shareCents: parseDecimalString(s.amount, { allowZero: true, decimals }),
     inputValue: s.amount,
   }));
   const sum = result.reduce((a, r) => a + r.shareCents, 0);
